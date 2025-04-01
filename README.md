@@ -14,7 +14,7 @@ This project was originally developed by Eric Bowman (StrainFlow) during Study G
 
 **Task:** The robot must learn to drive through a sequence of 10 waypoints using throttle and steering commands.
 
-**Versions:** Isaac Lab 2024.1.0+ - Isaac Sim 4.0.0+ ([Installation Guide](https://isaac-sim.github.io/IsaacLab/main/source/setup/installation/index.html))
+**Versions:** Isaac Lab 2.0 - Isaac Sim 4.5 ([Installation Guide](https://isaac-sim.github.io/IsaacLab/main/source/setup/installation/index.html))
 
 ## Contributors
 
