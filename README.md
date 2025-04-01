@@ -1,73 +1,153 @@
-# Leatherback Driving Environment for Isaac Lab
+# Leatherback Project Tutorial (Isaac Lab External Project)
+
+[![Part 1: Setup & Run](https://img.youtube.com/vi/bzHtZseHb34/0.jpg)](https://www.youtube.com/watch?v=bzHtZseHb34)
+[![Part 2.1: Code Explained](https://img.youtube.com/vi/li56b5KVAPc/0.jpg)](https://www.youtube.com/watch?v=li56b5KVAPc)
+[![Part 2.2: Code Explained](https://img.youtube.com/vi/Y9r7UyWpIAU/0.jpg)](https://www.youtube.com/watch?v=Y9r7UyWpIAU)
+
+*Watch the full playlist: [Leatherback Tutorial Series](https://www.youtube.com/watch?v=bzHtZseHb34&list=PLQQ577DOyRN8jR7xs73WNDy98q05ElidM)*
 
 ## Overview
 
-This repository contains a reinforcement learning environment for controlling a Leatherback wheeled robot within the NVIDIA Isaac Lab simulation platform.
-The environment uses the "direct" workflow from Isaac Lab.
+This repository contains the **Leatherback** project, a reinforcement learning environment demonstrating a driving navigation task within the NVIDIA Isaac Lab simulation platform. A four-wheeled vehicle learns to navigate through a series of waypoints.
 
-**Key Features:**
+This project was originally developed by Eric Bowman (StrainFlow) during Study Group Sessions in the [Omniverse Discord Community](https://discord.com/channels/827959428476174346/833873440418431017) and has been adapted into the recommended **external project** structure for Isaac Lab. This structure keeps the project isolated from the main Isaac Lab repository, simplifying updates and development.
 
-- Leatherback robot model with throttle and steering actuators.
-- Basic driving task (details to be added based on your specific task goals).
-- Integrates with Isaac Lab's simulation and RL capabilities.
+**Task:** The robot must learn to drive through a sequence of 10 waypoints using throttle and steering commands.
+
+**Versions:** Isaac Lab 2024.1.0+ - Isaac Sim 4.0.0+ ([Installation Guide](https://isaac-sim.github.io/IsaacLab/main/source/setup/installation/index.html))
+
+## Contributors
+
+- **Original Project:** [StrainFlow (Eric Bowman)](https://www.linkedin.com/in/strainflow/) & [Antoine Richard](https://github.com/AntoineRichard/)
+- **Modified by:** [Pappachuck](https://www.linkedin.com/in/renan-monteiro-barbosa/)
+- **Explained & Documented by:** [The Robotics Club](https://www.youtube.com/@madeautonomous) & [LycheeAI](https://www.youtube.com/@LycheeAI)
 
 ## Installation
 
-1.  **Install Isaac Lab:** Follow the [official Isaac Lab installation guide](https://isaac-sim.github.io/IsaacLab/main/source/setup/installation/index.html). We recommend using the conda installation.
+1.  **Install Isaac Lab:** Follow the [official Isaac Lab installation guide](https://isaac-sim.github.io/IsaacLab/main/source/setup/installation/index.html). The `conda` installation method is recommended as it simplifies running Python scripts.
 
 2.  **Clone this repository:**
     ```bash
-    git clone https://github.com/MuammerBay/isaac-leatherback.git
-    cd isaac-leatherback
+    git clone https://github.com/LycheeAI-Hub/Leatherback.git # Replace with your repo URL if different
+    cd Leatherback
     ```
 
-3.  **Install the package:** Using a python interpreter where Isaac Lab is installed (e.g., your `env_isaaclab` conda environment), install this package in editable mode:
+3.  **Install the project package:** Activate your Isaac Lab conda environment (e.g., `conda activate isaaclab`) and install this project package in editable mode:
     ```bash
-    # Ensure your Isaac Lab conda environment is activated
-    # conda activate env_isaaclab
+    # On Linux
+    python -m pip install -e source/Leatherback
 
-    # Install the package
-    pip install -e .
+    # On Windows
+    python -m pip install -e source\Leatherback
     ```
-    *Note: The `-e` flag installs the package in "editable" mode, linking directly to your source code, which is convenient for development.* 
+    *The `-e` flag installs the package in "editable" mode, linking directly to your source code.*
 
 ## Usage
 
-1.  **Verify Installation:** List the available tasks to ensure the environment is registered correctly:
-    ```bash
-    # Make sure your Isaac Lab conda environment is activated
-    python scripts/list_envs.py
-    ```
-    You should see `Template-Leatherback-Direct-v0` in the output.
+*(Ensure your Isaac Lab conda environment is activated before running these commands)*
 
-2.  **Run Training:** Start an RL training session (replace `<RL_LIBRARY>` with the specific library configured by the template, e.g., `skrl`):
+1.  **List Available Tasks:** Verify that the Leatherback environment is registered.
     ```bash
-    # Make sure your Isaac Lab conda environment is activated
-    python scripts/<RL_LIBRARY>/train.py --task Template-Leatherback-Direct-v0
+    # On Linux
+    python scripts/list_envs.py
+
+    # On Windows
+    python scripts\list_envs.py
     ```
+    You should see `Isaac-Leatherback-Direct-v0` in the output.
+
+2.  **Train the Agent:**
+    *   To watch training with a small number of environments:
+        ```bash
+        # On Linux
+        python scripts/skrl/train.py --task Isaac-Leatherback-Direct-v0 --num_envs 32
+
+        # On Windows
+        python scripts\skrl\train.py --task Isaac-Leatherback-Direct-v0 --num_envs 32
+        ```
+    *   To accelerate training (more environments, no graphical interface):
+        ```bash
+        # On Linux
+        python scripts/skrl/train.py --task Isaac-Leatherback-Direct-v0 --num_envs 4096 --headless
+
+        # On Windows
+        python scripts\skrl\train.py --task Isaac-Leatherback-Direct-v0 --num_envs 4096 --headless
+        ```
+    *   Training logs and checkpoints are saved under the `logs/skrl/leatherback_direct/` directory.
+
+3.  **Play/Evaluate the Agent:**
+    *   Run the best-performing policy found during training:
+        ```bash
+        # On Linux
+        python scripts/skrl/play.py --task Isaac-Leatherback-Direct-v0 --num_envs 32
+
+        # On Windows
+        python scripts\skrl\play.py --task Isaac-Leatherback-Direct-v0 --num_envs 32
+        ```
+    *   Run a specific checkpoint:
+        ```bash
+        # Example checkpoint path (replace with your actual path)
+        # On Linux
+        python scripts/skrl/play.py --task Isaac-Leatherback-Direct-v0 --checkpoint logs/skrl/leatherback_direct/<YOUR_RUN_DIR>/checkpoints/agent_<STEP>.pt
+
+        # On Windows
+        python scripts\skrl\play.py --task Isaac-Leatherback-Direct-v0 --checkpoint logs\skrl\leatherback_direct\<YOUR_RUN_DIR>\checkpoints\agent_<STEP>.pt
+        ```
+
+## Code Structure & Explanation
+
+This project utilizes the **Direct Workflow** provided by Isaac Lab. Key files include:
+
+-   `source/Leatherback/setup.py`: Defines the `Leatherback` Python package for installation.
+-   `source/Leatherback/Leatherback/tasks/direct/leatherback/`: Contains the core environment logic.
+    -   `__init__.py`: Registers the `Isaac-Leatherback-Direct-v0` Gymnasium environment.
+    -   `leatherback_env.py`: Implements the `LeatherbackEnv` class (observation/action spaces, rewards, resets, simulation stepping) and its configuration `LeatherbackEnvCfg`.
+    -   `leatherback.py`: Defines the `LEATHERBACK_CFG` articulation configuration (USD path, physics properties, actuators). Located under `isaaclab_assets` in a standard setup, but included here for completeness. *(Self-correction: The actual `leatherback.py` defining the asset config is typically in `isaaclab_assets`. This project likely references it or has a copy)*
+    -   `waypoint.py`: Defines the configuration for the waypoint visualization markers.
+    -   `agents/skrl_ppo_cfg.yaml`: Configures the PPO reinforcement learning algorithm (network architecture, hyperparameters) for the SKRL library.
+    -   `custom_assets/leatherback_simple_better.usd`: The 3D model of the Leatherback robot.
+
+**For a detailed code walkthrough, please refer to the YouTube videos:**
+
+-   **Part 2.1:** [https://youtu.be/li56b5KVAPc](https://youtu.be/li56b5KVAPc)
+-   **Part 2.2:** [https://www.youtube.com/watch?v=Y9r7UyWpIAU](https://www.youtube.com/watch?v=Y9r7UyWpIAU)
+
+## Building Your Own Project
+
+This project was created using the Isaac Lab template generator tool. You can create your own external projects or internal tasks using:
+
+```bash
+# On Linux
+./isaaclab.sh --new
+
+# On Windows
+isaaclab.bat --new
+```
+
+Refer to the [official Isaac Lab documentation](https://isaac-sim.github.io/IsaacLab/main/source/workflows/template/index.html) for more details on building your own projects.
 
 ## Dependencies
 
-- NVIDIA Isaac Lab (check Isaac Lab documentation for specific version compatibility)
-- Python >= 3.8
-- PyTorch
-- Gymnasium
+-   NVIDIA Isaac Lab (check documentation for version compatibility)
+-   Python >= 3.10
+-   PyTorch
+-   Gymnasium
+-   SKRL (or the RL library specified during project generation)
 
-## Custom Assets
-
-The Leatherback robot model (`leatherback_simple_better.usd`) is included in `source/Leatherback/tasks/direct/leatherback/custom_assets/`.
-
-## Development Setup (Optional)
+## Development Setup
 
 ### IDE Setup (VSCode)
 
-Follow the instructions in the original template README for setting up VSCode Python environment indexing.
+For autocompletion and environment indexing in VSCode, follow the setup instructions provided in the [Isaac Lab documentation](https://isaac-sim.github.io/IsaacLab/main/source/setup/vscode.html).
 
 ### Code Formatting
 
-This project uses `pre-commit` for code formatting. Install and run it:
+This project uses `pre-commit` for code formatting.
+
 ```bash
 pip install pre-commit
+pre-commit install # Installs git hooks
+# To run manually on all files:
 pre-commit run --all-files
 ```
 
