@@ -1,5 +1,6 @@
 # Leatherback Project Tutorial (Isaac Lab External Project)
 
+## Click the images below to watch the tutorial videos:
 [![Part 1: Setup & Run](https://img.youtube.com/vi/bzHtZseHb34/0.jpg)](https://www.youtube.com/watch?v=bzHtZseHb34)
 [![Part 2.1: Code Explained](https://img.youtube.com/vi/li56b5KVAPc/0.jpg)](https://www.youtube.com/watch?v=li56b5KVAPc)
 [![Part 2.2: Code Explained](https://img.youtube.com/vi/Y9r7UyWpIAU/0.jpg)](https://www.youtube.com/watch?v=Y9r7UyWpIAU)
