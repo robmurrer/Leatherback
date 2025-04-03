@@ -61,24 +61,24 @@ This project was originally developed by Eric Bowman (StrainFlow) during Study G
     # On Windows
     python scripts\list_envs.py
     ```
-    You should see `Isaac-Leatherback-Direct-v0` in the output.
+    You should see `Template-Leatherback-Direct-v0` in the output.
 
 2.  **Train the Agent:**
     *   To watch training with a small number of environments:
         ```bash
         # On Linux
-        python scripts/skrl/train.py --task Isaac-Leatherback-Direct-v0 --num_envs 32
+        python scripts/skrl/train.py --task Template-Leatherback-Direct-v0 --num_envs 32
 
         # On Windows
-        python scripts\skrl\train.py --task Isaac-Leatherback-Direct-v0 --num_envs 32
+        python scripts\skrl\train.py --task Template-Leatherback-Direct-v0 --num_envs 32
         ```
     *   To accelerate training (more environments, no graphical interface):
         ```bash
         # On Linux
-        python scripts/skrl/train.py --task Isaac-Leatherback-Direct-v0 --num_envs 4096 --headless
+        python scripts/skrl/train.py --task Template-Leatherback-Direct-v0 --num_envs 4096 --headless
 
         # On Windows
-        python scripts\skrl\train.py --task Isaac-Leatherback-Direct-v0 --num_envs 4096 --headless
+        python scripts\skrl\train.py --task Template-Leatherback-Direct-v0 --num_envs 4096 --headless
         ```
     *   Training logs and checkpoints are saved under the `logs/skrl/leatherback_direct/` directory.
 
@@ -86,19 +86,19 @@ This project was originally developed by Eric Bowman (StrainFlow) during Study G
     *   Run the best-performing policy found during training:
         ```bash
         # On Linux
-        python scripts/skrl/play.py --task Isaac-Leatherback-Direct-v0 --num_envs 32
+        python scripts/skrl/play.py --task Template-Leatherback-Direct-v0 --num_envs 32
 
         # On Windows
-        python scripts\skrl\play.py --task Isaac-Leatherback-Direct-v0 --num_envs 32
+        python scripts\skrl\play.py --task Template-Leatherback-Direct-v0 --num_envs 32
         ```
     *   Run a specific checkpoint:
         ```bash
         # Example checkpoint path (replace with your actual path)
         # On Linux
-        python scripts/skrl/play.py --task Isaac-Leatherback-Direct-v0 --checkpoint logs/skrl/leatherback_direct/<YOUR_RUN_DIR>/checkpoints/agent_<STEP>.pt
+        python scripts/skrl/play.py --task Template-Leatherback-Direct-v0 --checkpoint logs/skrl/leatherback_direct/<YOUR_RUN_DIR>/checkpoints/agent_<STEP>.pt
 
         # On Windows
-        python scripts\skrl\play.py --task Isaac-Leatherback-Direct-v0 --checkpoint logs\skrl\leatherback_direct\<YOUR_RUN_DIR>\checkpoints\agent_<STEP>.pt
+        python scripts\skrl\play.py --task Template-Leatherback-Direct-v0 --checkpoint logs\skrl\leatherback_direct\<YOUR_RUN_DIR>\checkpoints\agent_<STEP>.pt
         ```
 
 ## Code Structure & Explanation
@@ -132,31 +132,6 @@ isaaclab.bat --new
 ```
 
 Refer to the [official Isaac Lab documentation](https://isaac-sim.github.io/IsaacLab/main/source/workflows/template/index.html) for more details on building your own projects.
-
-## Dependencies
-
--   NVIDIA Isaac Lab (check documentation for version compatibility)
--   Python >= 3.10
--   PyTorch
--   Gymnasium
--   SKRL (or the RL library specified during project generation)
-
-## Development Setup
-
-### IDE Setup (VSCode)
-
-For autocompletion and environment indexing in VSCode, follow the setup instructions provided in the [Isaac Lab documentation](https://isaac-sim.github.io/IsaacLab/main/source/setup/vscode.html).
-
-### Code Formatting
-
-This project uses `pre-commit` for code formatting.
-
-```bash
-pip install pre-commit
-pre-commit install # Installs git hooks
-# To run manually on all files:
-pre-commit run --all-files
-```
 
 ## License
 
