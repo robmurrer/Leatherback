@@ -35,7 +35,7 @@ This project was originally developed by Eric Bowman (StrainFlow) during Study G
 
 2.  **Clone this repository:**
     ```bash
-    git clone https://github.com/LycheeAI-Hub/Leatherback.git # Replace with your repo URL if different
+    git clone https://github.com/MuammerBay/Leatherback.git # Replace with your repo URL if different
     cd Leatherback
     ```
 
