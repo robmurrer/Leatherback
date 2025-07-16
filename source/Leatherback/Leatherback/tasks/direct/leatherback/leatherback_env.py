@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import torch
 from collections.abc import Sequence
+import csv
+import os
+from datetime import datetime
 import isaaclab.sim as sim_utils
 from isaaclab.assets import Articulation, ArticulationCfg
 from isaaclab.envs import DirectRLEnv, DirectRLEnvCfg
@@ -61,6 +64,9 @@ class LeatherbackEnv(DirectRLEnv):
         self.heading_coefficient = 0.25
         self.heading_progress_weight = 0.05
         self._target_index = torch.zeros((self.num_envs), device=self.device, dtype=torch.int32)
+        
+        # Initialize CSV logging
+        self._setup_csv_logging()
 
     def _setup_scene(self):
         # Create a large ground plane without grid
@@ -98,6 +104,7 @@ class LeatherbackEnv(DirectRLEnv):
         steering_scale = 0.1
         steering_max = 0.75
 
+        print("actions:", actions)
         self._throttle_action = actions[:, 0].repeat_interleave(4).reshape((-1, 4)) * throttle_scale
         self.throttle_action = torch.clamp(self._throttle_action, -throttle_max, throttle_max)
         self._throttle_state = self._throttle_action
@@ -136,10 +143,26 @@ class LeatherbackEnv(DirectRLEnv):
             ),
             dim=-1,
         )
-        
+
+        #obs = torch.tensor([[ 3.6120e+00,  9.9669e-01,  8.1352e-02,  1.6307e+00, -5.2506e-04,
+        #                     4.0496e-03,  2.8913e+01, -2.1182e-02]], device="cuda:0", dtype=torch.float32)
+
+        #obs = torch.tensor([[1.6265e+00, 9.9842e-01, 5.6207e-02, 1.7108e+00, 7.8290e-03, 3.1699e-02, 3.3571e+01, 7.1541e-03]], device='cuda:0')
+
+        obs = torch.tensor([[ 9.4722e-01,  9.9796e-01,  6.3904e-02,  1.7456e+00, -3.5340e-02, -2.8141e-01,  3.4410e+01,  1.0955e-02]], device='cuda:0')
+        #outputs: (tensor([[ 4.4531, -0.1397]], device='cuda:0'), tensor([[-2.0371]], device='cuda:0'), {'mean_actions': tensor([[3.8125, 0.2330]], device='cuda:0')})
+        #actions: tensor([[3.8125, 0.2330]], device='cuda:0')
+
+
+
         if torch.any(obs.isnan()):
             raise ValueError("Observations cannot be NAN")
 
+        # Log observations to CSV
+        self._log_observations_to_csv(obs)
+
+        print ("heading error:", self.target_heading_error)
+        print ("observations:", obs)
         return {"policy": obs}
     
     def _get_rewards(self) -> torch.Tensor:
@@ -199,7 +222,7 @@ class LeatherbackEnv(DirectRLEnv):
         spacing = 2 / self._num_goals
         target_positions = torch.arange(-0.8, 1.1, spacing, device=self.device) * self.env_spacing / self.course_length_coefficient
         self._target_positions[env_ids, :len(target_positions), 0] = target_positions
-        self._target_positions[env_ids, :, 1] = torch.rand((num_reset, self._num_goals), dtype=torch.float32, device=self.device) + self.course_length_coefficient
+        self._target_positions[env_ids, :, 1] = 0 
         self._target_positions[env_ids, :] += self.scene.env_origins[env_ids, :2].unsqueeze(1)
 
         self._target_index[env_ids] = 0
@@ -219,3 +242,58 @@ class LeatherbackEnv(DirectRLEnv):
         )
         self._heading_error = torch.atan2(torch.sin(target_heading_w - heading), torch.cos(target_heading_w - heading))
         self._previous_heading_error = self._heading_error.clone()
+
+    def _setup_csv_logging(self):
+        """Setup CSV logging for observations"""
+        # Create logging directory if it doesn't exist (use existing logs structure)
+        log_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))), "logs", "observations")
+        os.makedirs(log_dir, exist_ok=True)
+        
+        # Create timestamp-based filename
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        self.csv_filename = os.path.join(log_dir, f"observations_{timestamp}.csv")
+        
+        # Define CSV headers
+        self.csv_headers = [
+            "timestamp",
+            "env_id", 
+            "position_error",
+            "heading_error_cos",
+            "heading_error_sin", 
+            "root_lin_vel_x",
+            "root_lin_vel_y",
+            "root_ang_vel_z",
+            "throttle_state",
+            "steering_state"
+        ]
+        
+        # Write headers to CSV file
+        with open(self.csv_filename, 'w', newline='') as csvfile:
+            writer = csv.writer(csvfile)
+            writer.writerow(self.csv_headers)
+
+    def _log_observations_to_csv(self, obs: torch.Tensor):
+        """Log observations to CSV file"""
+        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")
+        
+        # Convert observations to CPU and numpy for CSV writing
+        obs_cpu = obs.cpu().numpy()
+        
+        # Write observations for each environment
+        with open(self.csv_filename, 'a', newline='') as csvfile:
+            writer = csv.writer(csvfile)
+            
+            for env_id in range(self.num_envs):
+                row = [
+                    current_time,
+                    env_id,
+                    obs_cpu[env_id, 0],  # position_error
+                    obs_cpu[env_id, 1],  # heading_error_cos
+                    obs_cpu[env_id, 2],  # heading_error_sin
+                    obs_cpu[env_id, 3],  # root_lin_vel_x
+                    obs_cpu[env_id, 4],  # root_lin_vel_y
+                    obs_cpu[env_id, 5],  # root_ang_vel_z
+                    obs_cpu[env_id, 6],  # throttle_state
+                    obs_cpu[env_id, 7],  # steering_state
+                ]
+                writer.writerow(row)

@@ -86,13 +86,14 @@ from isaaclab.envs import DirectMARLEnv, multi_agent_to_single_agent
 from isaaclab.utils.dict import print_dict
 from isaaclab.utils.pretrained_checkpoint import get_published_pretrained_checkpoint
 
-from isaaclab_rl.skrl import SkrlVecEnvWrapper
+from isaaclab_rl.skrl import SkrlVecEnvWrapper, export_policy_as_onnx, export_policy_as_jit  # add the exporter
 
 import isaaclab_tasks  # noqa: F401
 from isaaclab_tasks.utils import get_checkpoint_path, load_cfg_from_registry, parse_env_cfg
 
 import Leatherback.tasks  # noqa: F401
-
+from skrl.envs.wrappers.torch import MultiAgentEnvWrapper, Wrapper
+#
 # config shortcuts
 algorithm = args_cli.algorithm.lower()
 
@@ -170,6 +171,28 @@ def main():
     # set agent to evaluation mode
     runner.agent.set_running_mode("eval")
 
+    # TODO amazing thigns go here
+    # region ONNX stuff
+    is_recurrent = runner.agent._rnn
+    multi_agent = isinstance(env, MultiAgentEnvWrapper)
+    policy_nn = runner.agent.policies if multi_agent else runner.agent.policy
+    possible_agents = env.possible_agents if multi_agent else ["agent"]
+    for agent_id in possible_agents:
+        if hasattr(runner.obs_normalizer, "policy"):
+            normalizer = runner.obs_normalizer[agent_id]["policy"]
+        else:
+            normalizer = runner.obs_normalizer[agent_id]
+        # export policy to onnx/jit
+        export_model_dir = os.path.join(os.path.dirname(resume_path), "exported")
+        export_policy_as_onnx(
+            is_recurrent,
+            policy_nn, # policy_nn
+            normalizer=runner.obs_normalizer, 
+            path=export_model_dir, 
+            filename=f"policy_{agent_id}.onnx"
+        )
+
+    # end of region
     # reset environment
     obs, _ = env.reset()
     timestep = 0
@@ -181,6 +204,7 @@ def main():
         with torch.inference_mode():
             # agent stepping
             outputs = runner.agent.act(obs, timestep=0, timesteps=0)
+            print("outputs:", outputs)
             # - multi-agent (deterministic) actions
             if hasattr(env, "possible_agents"):
                 actions = {a: outputs[-1][a].get("mean_actions", outputs[0][a]) for a in env.possible_agents}
