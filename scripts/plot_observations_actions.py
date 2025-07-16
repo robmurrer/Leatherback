@@ -11,14 +11,10 @@ import os
 from pathlib import Path
 import seaborn as sns
 
-def plot_csv_data(csv_path, output_dir=None, show_plots=True):
+def plot_csv_data(csv_path, show_plots=True):
     """
-    Plot observations and actions from CSV file
-    
-    Args:
-        csv_path (str): Path to the CSV file
-        output_dir (str): Directory to save plots (optional)
-        show_plots (bool): Whether to display plots interactively
+    Plot observations and actions: time series, boxplots, and generate HTML table with real data
+    Output directory is automatically determined from CSV path and timestamp
     """
     # Read the CSV data
     print(f"Loading data from: {csv_path}")
@@ -31,160 +27,229 @@ def plot_csv_data(csv_path, output_dir=None, show_plots=True):
     print(f"Found {len(obs_columns)} observation dimensions and {len(action_columns)} action dimensions")
     print(f"Total timesteps: {len(df)}")
     
+    # Create output directory based on CSV location and timestamp
+    csv_dir = os.path.dirname(csv_path)
+    csv_filename = os.path.basename(csv_path)
+    timestamp = csv_filename.replace('observations_actions_', '').replace('.csv', '')
+    output_dir = os.path.join(csv_dir, f"analysis_{timestamp}")
+    os.makedirs(output_dir, exist_ok=True)
+    
     # Set up the plotting style
     plt.style.use('seaborn-v0_8')
     sns.set_palette("husl")
     
-    # Create output directory if specified
-    if output_dir:
-        os.makedirs(output_dir, exist_ok=True)
+    # Create separate plots
     
-    # Plot 1: Observations over time
+    # Plot 1: Observations time series
     if obs_columns:
-        fig, axes = plt.subplots(figsize=(12, 8))
+        fig, ax = plt.subplots(figsize=(12, 6))
+        plot_obs = obs_columns[:10] if len(obs_columns) > 10 else obs_columns
+        for i, col in enumerate(plot_obs):
+            ax.plot(df['sim_time'], df[col], label=col, alpha=0.8, linewidth=1.5)
         
-        # If too many observations, plot only first 10 and last 10
-        if len(obs_columns) > 20:
-            plot_obs = obs_columns[:10] + obs_columns[-10:]
-            print(f"Too many observation dimensions ({len(obs_columns)}). Plotting first 10 and last 10.")
-        else:
-            plot_obs = obs_columns
+        ax.set_xlabel('Simulation Time (s)')
+        ax.set_ylabel('Observation Values')
+        ax.set_title(f'Observations Over Time ({len(plot_obs)} dimensions)')
+        ax.legend()
+        ax.grid(True, alpha=0.3)
         
-        for col in plot_obs:
-            plt.plot(df['sim_time'], df[col], label=col, alpha=0.7, linewidth=1)
-        
-        plt.xlabel('Simulation Time (s)')
-        plt.ylabel('Observation Values')
-        plt.title('Observations Over Time')
-        plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
-        plt.grid(True, alpha=0.3)
-        plt.tight_layout()
-        
-        if output_dir:
-            plt.savefig(os.path.join(output_dir, 'observations_time_series.png'), dpi=300, bbox_inches='tight')
-        if show_plots:
-            plt.show()
-        else:
-            plt.close()
+        obs_plot_path = os.path.join(output_dir, 'observations_timeseries.png')
+        plt.savefig(obs_plot_path, dpi=300, bbox_inches='tight')
+        plt.close()
+        print(f"Observations time series saved to: {obs_plot_path}")
     
-    # Plot 2: Actions over time
+    # Plot 2: Actions time series
     if action_columns:
-        fig, axes = plt.subplots(figsize=(12, 6))
-        
-        for col in action_columns:
-            plt.plot(df['sim_time'], df[col], label=col, linewidth=2)
-        
-        plt.xlabel('Simulation Time (s)')
-        plt.ylabel('Action Values')
-        plt.title('Actions Over Time')
-        plt.legend()
-        plt.grid(True, alpha=0.3)
-        plt.tight_layout()
-        
-        if output_dir:
-            plt.savefig(os.path.join(output_dir, 'actions_time_series.png'), dpi=300, bbox_inches='tight')
-        if show_plots:
-            plt.show()
-        else:
-            plt.close()
-    
-    # Plot 3: Action distribution histograms
-    if action_columns:
-        n_actions = len(action_columns)
-        fig, axes = plt.subplots(1, n_actions, figsize=(4*n_actions, 4))
-        if n_actions == 1:
-            axes = [axes]
-        
+        fig, ax = plt.subplots(figsize=(12, 6))
         for i, col in enumerate(action_columns):
-            axes[i].hist(df[col], bins=30, alpha=0.7, edgecolor='black')
-            axes[i].set_title(f'{col} Distribution')
-            axes[i].set_xlabel('Action Value')
-            axes[i].set_ylabel('Frequency')
-            axes[i].grid(True, alpha=0.3)
+            ax.plot(df['sim_time'], df[col], label=col, linewidth=2)
+        
+        ax.set_xlabel('Simulation Time (s)')
+        ax.set_ylabel('Action Values')
+        ax.set_title(f'Actions Over Time ({len(action_columns)} dimensions)')
+        ax.legend()
+        ax.grid(True, alpha=0.3)
+        
+        act_plot_path = os.path.join(output_dir, 'actions_timeseries.png')
+        plt.savefig(act_plot_path, dpi=300, bbox_inches='tight')
+        plt.close()
+        print(f"Actions time series saved to: {act_plot_path}")
+    
+    # Plot 3: Combined boxplots
+    if obs_columns or action_columns:
+        fig, axes = plt.subplots(1, 2, figsize=(16, 6))
+        
+        # Observations boxplot
+        if obs_columns:
+            plot_obs = obs_columns[:15] if len(obs_columns) > 15 else obs_columns
+            obs_data = [df[col] for col in plot_obs]
+            box_plot1 = axes[0].boxplot(obs_data, labels=plot_obs, patch_artist=True)
+            
+            colors1 = plt.cm.Set3(np.linspace(0, 1, len(plot_obs)))
+            for patch, color in zip(box_plot1['boxes'], colors1):
+                patch.set_facecolor(color)
+                patch.set_alpha(0.7)
+            
+            axes[0].set_xlabel('Observation Dimensions')
+            axes[0].set_ylabel('Values')
+            axes[0].set_title('Observations Distribution')
+            axes[0].grid(True, alpha=0.3)
+            axes[0].tick_params(axis='x', rotation=45, labelsize=8)
+        
+        # Actions boxplot
+        if action_columns:
+            action_data = [df[col] for col in action_columns]
+            box_plot2 = axes[1].boxplot(action_data, labels=action_columns, patch_artist=True)
+            
+            colors2 = plt.cm.Set2(np.linspace(0, 1, len(action_columns)))
+            for patch, color in zip(box_plot2['boxes'], colors2):
+                patch.set_facecolor(color)
+                patch.set_alpha(0.7)
+            
+            axes[1].set_xlabel('Action Dimensions')
+            axes[1].set_ylabel('Values')
+            axes[1].set_title('Actions Distribution')
+            axes[1].grid(True, alpha=0.3)
+            axes[1].tick_params(axis='x', rotation=45, labelsize=8)
         
         plt.tight_layout()
-        
-        if output_dir:
-            plt.savefig(os.path.join(output_dir, 'action_distributions.png'), dpi=300, bbox_inches='tight')
-        if show_plots:
-            plt.show()
-        else:
-            plt.close()
+        boxplot_path = os.path.join(output_dir, 'boxplots.png')
+        plt.savefig(boxplot_path, dpi=300, bbox_inches='tight')
+        plt.close()
+        print(f"Boxplots saved to: {boxplot_path}")
     
-    # Plot 4: Observation statistics summary
-    if obs_columns:
-        fig, axes = plt.subplots(2, 2, figsize=(12, 8))
-        
-        # Mean values over time (rolling window)
-        window_size = max(1, len(df) // 20)  # 5% of data
-        obs_data = df[obs_columns]
-        rolling_mean = obs_data.rolling(window=window_size, center=True).mean()
-        rolling_std = obs_data.rolling(window=window_size, center=True).std()
-        
-        # Plot mean
-        axes[0, 0].plot(df['sim_time'], rolling_mean.mean(axis=1), 'b-', linewidth=2)
-        axes[0, 0].set_title('Rolling Mean of All Observations')
-        axes[0, 0].set_xlabel('Simulation Time (s)')
-        axes[0, 0].set_ylabel('Mean Value')
-        axes[0, 0].grid(True, alpha=0.3)
-        
-        # Plot std
-        axes[0, 1].plot(df['sim_time'], rolling_std.mean(axis=1), 'r-', linewidth=2)
-        axes[0, 1].set_title('Rolling Std of All Observations')
-        axes[0, 1].set_xlabel('Simulation Time (s)')
-        axes[0, 1].set_ylabel('Standard Deviation')
-        axes[0, 1].grid(True, alpha=0.3)
-        
-        # Plot observation ranges
-        obs_ranges = obs_data.max() - obs_data.min()
-        axes[1, 0].bar(range(len(obs_ranges)), obs_ranges)
-        axes[1, 0].set_title('Observation Value Ranges')
-        axes[1, 0].set_xlabel('Observation Index')
-        axes[1, 0].set_ylabel('Range (Max - Min)')
-        axes[1, 0].grid(True, alpha=0.3)
-        
-        # Plot correlation matrix (if not too many observations)
-        if len(obs_columns) <= 20:
-            corr_matrix = obs_data.corr()
-            im = axes[1, 1].imshow(corr_matrix, cmap='coolwarm', vmin=-1, vmax=1)
-            axes[1, 1].set_title('Observation Correlation Matrix')
-            axes[1, 1].set_xticks(range(len(obs_columns)))
-            axes[1, 1].set_yticks(range(len(obs_columns)))
-            axes[1, 1].set_xticklabels([f'obs_{i}' for i in range(len(obs_columns))], rotation=45)
-            axes[1, 1].set_yticklabels([f'obs_{i}' for i in range(len(obs_columns))])
-            plt.colorbar(im, ax=axes[1, 1])
-        else:
-            axes[1, 1].text(0.5, 0.5, f'Too many observations\n({len(obs_columns)}) for\ncorrelation matrix', 
-                           ha='center', va='center', transform=axes[1, 1].transAxes)
-            axes[1, 1].set_title('Observation Correlation Matrix')
-        
-        plt.tight_layout()
-        
-        if output_dir:
-            plt.savefig(os.path.join(output_dir, 'observation_statistics.png'), dpi=300, bbox_inches='tight')
-        if show_plots:
-            plt.show()
-        else:
-            plt.close()
+    # Generate HTML table with real data
+    generate_html_table(df, obs_columns, action_columns, output_dir, timestamp)
     
-    # Print summary statistics
-    print("\n" + "="*50)
-    print("SUMMARY STATISTICS")
-    print("="*50)
+    return output_dir
+
+def generate_html_table(df, obs_columns, action_columns, output_dir, timestamp):
+    """Generate HTML file with real data table"""
     
-    if obs_columns:
-        print(f"\nObservations ({len(obs_columns)} dimensions):")
-        obs_stats = df[obs_columns].describe()
-        print(obs_stats)
+    html_content = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Observations and Actions Data - {timestamp}</title>
+        <style>
+            body {{ font-family: Arial, sans-serif; margin: 20px; }}
+            h1 {{ color: #333; }}
+            h2 {{ color: #666; margin-top: 30px; }}
+            table {{ border-collapse: collapse; width: 100%; margin-top: 20px; }}
+            th, td {{ border: 1px solid #ddd; padding: 8px; text-align: center; }}
+            th {{ background-color: #f2f2f2; font-weight: bold; }}
+            .obs-col {{ background-color: #e3f2fd; }}
+            .act-col {{ background-color: #fff3e0; }}
+            .stats-table {{ margin-top: 20px; }}
+            .info {{ background-color: #f8f9fa; padding: 15px; border-radius: 5px; margin: 20px 0; }}
+            .data-table {{ max-height: 600px; overflow-y: auto; }}
+        </style>
+    </head>
+    <body>
+        <h1>Observations and Actions Analysis - {timestamp}</h1>
+        
+        <div class="info">
+            <h3>Dataset Info</h3>
+            <p><strong>Total Timesteps:</strong> {len(df)}</p>
+            <p><strong>Simulation Duration:</strong> {df['sim_time'].iloc[-1]:.3f} seconds</p>
+            <p><strong>Observations:</strong> {len(obs_columns)} dimensions</p>
+            <p><strong>Actions:</strong> {len(action_columns)} dimensions</p>
+            <p><strong>Average Step Time:</strong> {df['sim_time'].iloc[-1] / len(df):.6f} seconds</p>
+        </div>
+        
+        <h2>Statistics Summary</h2>
+        <div class="stats-table">
+    """
     
-    if action_columns:
-        print(f"\nActions ({len(action_columns)} dimensions):")
-        action_stats = df[action_columns].describe()
-        print(action_stats)
+    # Add statistics table
+    all_columns = obs_columns + action_columns
+    html_content += """
+            <table>
+                <tr>
+                    <th>Variable</th>
+                    <th>Type</th>
+                    <th>Mean</th>
+                    <th>Std</th>
+                    <th>Min</th>
+                    <th>Max</th>
+                    <th>Median</th>
+                    <th>Q25</th>
+                    <th>Q75</th>
+                </tr>
+    """
     
-    print(f"\nSimulation Duration: {df['sim_time'].iloc[-1]:.3f} seconds")
-    print(f"Total Timesteps: {len(df)}")
-    print(f"Average Step Time: {df['sim_time'].iloc[-1] / len(df):.6f} seconds")
+    for col in all_columns:
+        var_type = 'Observation' if col.startswith('obs_') else 'Action'
+        css_class = 'obs-col' if col.startswith('obs_') else 'act-col'
+        html_content += f"""
+                <tr>
+                    <td class="{css_class}"><strong>{col}</strong></td>
+                    <td class="{css_class}">{var_type}</td>
+                    <td class="{css_class}">{df[col].mean():.6f}</td>
+                    <td class="{css_class}">{df[col].std():.6f}</td>
+                    <td class="{css_class}">{df[col].min():.6f}</td>
+                    <td class="{css_class}">{df[col].max():.6f}</td>
+                    <td class="{css_class}">{df[col].median():.6f}</td>
+                    <td class="{css_class}">{df[col].quantile(0.25):.6f}</td>
+                    <td class="{css_class}">{df[col].quantile(0.75):.6f}</td>
+                </tr>
+        """
+    
+    html_content += """
+            </table>
+        </div>
+        
+        <h2>Complete Data Table (All Timesteps)</h2>
+        <div class="data-table">
+            <table>
+                <tr>
+                    <th>Timestep</th>
+                    <th>Sim Time (s)</th>
+    """
+    
+    # Add column headers
+    for col in obs_columns:
+        html_content += f'<th class="obs-col">{col}</th>'
+    for col in action_columns:
+        html_content += f'<th class="act-col">{col}</th>'
+    
+    html_content += "</tr>"
+    
+    # Add all data rows
+    for idx, row in df.iterrows():
+        html_content += f"""
+                <tr>
+                    <td>{row['timestep']:.0f}</td>
+                    <td>{row['sim_time']:.4f}</td>
+        """
+        
+        for col in obs_columns:
+            html_content += f'<td class="obs-col">{row[col]:.6f}</td>'
+        for col in action_columns:
+            html_content += f'<td class="act-col">{row[col]:.6f}</td>'
+        
+        html_content += "</tr>"
+    
+    html_content += """
+            </table>
+        </div>
+        
+        <div class="info">
+            <p><em>Generated on: {timestamp}</em></p>
+            <p><em>Observations are highlighted in blue, Actions in orange</em></p>
+        </div>
+        
+    </body>
+    </html>
+    """
+    
+    # Save HTML file
+    html_path = os.path.join(output_dir, 'data_table.html')
+    with open(html_path, 'w') as f:
+        f.write(html_content)
+    
+    print(f"HTML data table saved to: {html_path}")
+    print(f"Open in browser: file://{os.path.abspath(html_path)}")
 
 def find_latest_csv(logs_dir):
     """Find the most recently created CSV file in the logs directory"""
@@ -209,8 +274,6 @@ def main():
     parser.add_argument("--csv_path", type=str, help="Path to the CSV file to plot")
     parser.add_argument("--logs_dir", type=str, default="logs", 
                        help="Directory to search for CSV files (default: logs)")
-    parser.add_argument("--output_dir", type=str, help="Directory to save plots")
-    parser.add_argument("--no_show", action="store_true", help="Don't display plots interactively")
     
     args = parser.parse_args()
     
@@ -230,18 +293,10 @@ def main():
         print(f"Error: CSV file not found: {csv_path}")
         return
     
-    # Set output directory
-    output_dir = args.output_dir
-    if output_dir is None and not args.no_show:
-        # Create output directory next to CSV file
-        csv_dir = os.path.dirname(csv_path)
-        output_dir = os.path.join(csv_dir, "plots")
+    # Generate complete analysis (no display, save only)
+    output_dir = plot_csv_data(csv_path, show_plots=False)
     
-    # Generate plots
-    plot_csv_data(csv_path, output_dir, show_plots=not args.no_show)
-    
-    if output_dir:
-        print(f"\nPlots saved to: {output_dir}")
+    print(f"\nAnalysis complete! Files saved to: {output_dir}")
 
 if __name__ == "__main__":
     main()
