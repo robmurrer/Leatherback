@@ -87,6 +87,7 @@ import isaaclab_tasks  # noqa: F401
 from isaaclab_tasks.utils.hydra import hydra_task_config
 
 import Leatherback.tasks  # noqa: F401
+import Robpole.tasks  # noqa: F401
 
 # config shortcuts
 algorithm = args_cli.algorithm.lower()
