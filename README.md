@@ -1,3 +1,12 @@
+# Rob Hacks
+* imported cartpole example renamed as Robpole.
+* works on both frameworks. need to install it same way as leatherback -e source/Robpole
+* need to vendor in all config and usds
+* trying to modify to export onnx etc so we can do confirmation on format
+* will try to port Leatherback to rsl_rl when confident
+
+...
+
 # Leatherback Project Tutorial (Isaac Lab External Project)
 
 ## Click the images below to watch the tutorial videos:
