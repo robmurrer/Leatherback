@@ -2,7 +2,7 @@
 * imported cartpole example renamed as Robpole.
 * works on both frameworks. need to install it same way as leatherback -e source/Robpole
 * need to vendor in all config and usds
-* trying to modify to export onnx etc so we can do confirmation on format
+* confirmation of onnx vs lab model with scripts/inference
 * will try to port Leatherback to rsl_rl when confident
 
 ...
@@ -109,6 +109,38 @@ This project was originally developed by Eric Bowman (StrainFlow) during Study G
         # On Windows
         python scripts\skrl\play.py --task Template-Leatherback-Direct-v0 --checkpoint logs\skrl\leatherback_direct\<YOUR_RUN_DIR>\checkpoints\agent_<STEP>.pt
         ```
+
+4.  **Data Logging & Analysis:**
+    Both frameworks now support CSV logging of observations and actions for analysis:
+    
+    *   **SKRL Framework:**
+        ```bash
+        # CSV logging is enabled by default, logs are saved to logs/skrl/<task>/csv_logs/
+        python scripts/skrl/play.py --task Template-Leatherback-Direct-v0 --num_envs 32
+        
+        # To disable CSV logging
+        python scripts/skrl/play.py --task Template-Leatherback-Direct-v0 --num_envs 32 --no_log_csv
+        ```
+    
+    *   **RSL-RL Framework:**
+        ```bash
+        # CSV logging is enabled by default, logs are saved to logs/rsl_rl/<task>/csv_logs/
+        python scripts/rsl_rl/play.py --task Template-Leatherback-Direct-v0 --num_envs 32
+        
+        # To disable CSV logging
+        python scripts/rsl_rl/play.py --task Template-Leatherback-Direct-v0 --num_envs 32 --no_log_csv
+        ```
+    
+    *   **Plot and Analyze Data:**
+        ```bash
+        # Automatically finds the latest CSV file and generates plots + HTML analysis
+        python scripts/plot_observations_actions.py
+        
+        # Or specify a specific CSV file
+        python scripts/plot_observations_actions.py --csv_path path/to/your/file.csv
+        ```
+    
+    The CSV files contain timestep, simulation time, all observations, and all actions. When CSV logging is enabled, the play scripts will automatically stop after ~1000 steps (approximately one episode) to prevent excessive data generation.
 
 ## Code Structure & Explanation
 

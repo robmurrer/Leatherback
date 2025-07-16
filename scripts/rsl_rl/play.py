@@ -214,6 +214,11 @@ def main():
                 # Exit the play loop after recording one video
                 if timestep == args_cli.video_length:
                     break
+            elif args_cli.log_csv:
+                # Exit after logging a reasonable number of steps (one episode worth)
+                if timestep >= 1000:  # Adjust this number based on typical episode length
+                    print(f"[INFO] CSV logging completed after {timestep} steps.")
+                    break
 
             # time delay for real-time evaluation
             sleep_time = dt - (time.time() - start_time)
