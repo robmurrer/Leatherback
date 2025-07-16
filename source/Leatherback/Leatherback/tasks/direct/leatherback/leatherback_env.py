@@ -98,6 +98,15 @@ class LeatherbackEnv(DirectRLEnv):
         steering_scale = 0.1
         steering_max = 0.75
 
+        # Debug: Check for extreme actions that might cause instability
+        if torch.any(torch.abs(actions) > 10.0):
+            print(f"WARNING: Extreme actions detected at step {self.common_step_counter}")
+            print(f"Action range: min={actions.min().item():.3f}, max={actions.max().item():.3f}")
+            print(f"Actions with abs > 5: {torch.sum(torch.abs(actions) > 5.0).item()}")
+        
+        # Clamp actions to reasonable range to prevent simulation instability
+        actions = torch.clamp(actions, -5.0, 5.0)
+
         self._throttle_action = actions[:, 0].repeat_interleave(4).reshape((-1, 4)) * throttle_scale
         self.throttle_action = torch.clamp(self._throttle_action, -throttle_max, throttle_max)
         self._throttle_state = self._throttle_action
@@ -138,6 +147,15 @@ class LeatherbackEnv(DirectRLEnv):
         )
         
         if torch.any(obs.isnan()):
+            print(f"NaN detected in observations at step {self.common_step_counter}")
+            print(f"position_error: {torch.any(self._position_error.isnan())}")
+            print(f"target_heading_error: {torch.any(self.target_heading_error.isnan())}")
+            print(f"root_lin_vel_b: {torch.any(self.leatherback.data.root_lin_vel_b.isnan())}")
+            print(f"root_ang_vel_w: {torch.any(self.leatherback.data.root_ang_vel_w.isnan())}")
+            print(f"throttle_state: {torch.any(self._throttle_state.isnan())}")
+            print(f"steering_state: {torch.any(self._steering_state.isnan())}")
+            print(f"root_pos_w: {torch.any(self.leatherback.data.root_pos_w.isnan())}")
+            print(f"target_positions: {torch.any(self._target_positions.isnan())}")
             raise ValueError("Observations cannot be NAN")
 
         return {"policy": obs}
