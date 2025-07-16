@@ -11,7 +11,7 @@ from isaaclab_rl.rsl_rl import RslRlOnPolicyRunnerCfg, RslRlPpoActorCriticCfg, R
 class LeatherbackPPORunnerCfg(RslRlOnPolicyRunnerCfg):
     """Configuration for training Leatherback with RSL-RL PPO."""
     
-    # Training parameters (matching SKRL config)
+    # Training parameters (matching SKRL config exactly)
     num_steps_per_env = 32  # rollouts in SKRL
     max_iterations = 300    # 9600 timesteps / 32 rollouts = 300 iterations
     save_interval = 50
@@ -20,14 +20,14 @@ class LeatherbackPPORunnerCfg(RslRlOnPolicyRunnerCfg):
     
     policy = RslRlPpoActorCriticCfg(
         # Network architecture (matching SKRL: [32, 32])
-        init_noise_std=0.1,  # Reduced from 1.0 to prevent extreme initial actions
+        init_noise_std=1.0,  # Back to original value
         actor_hidden_dims=[32, 32],
         critic_hidden_dims=[32, 32],
         activation="elu",
     )
     
     algorithm = RslRlPpoAlgorithmCfg(
-        # Match SKRL hyperparameters
+        # Match SKRL hyperparameters exactly
         value_loss_coef=2.0,     # value_loss_scale in SKRL
         use_clipped_value_loss=True,  # clip_predicted_values in SKRL
         clip_param=0.2,          # ratio_clip in SKRL
