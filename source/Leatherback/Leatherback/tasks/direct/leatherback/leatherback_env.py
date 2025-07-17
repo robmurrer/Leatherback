@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import torch
+import csv
+import os
+import datetime
 from collections.abc import Sequence
 import isaaclab.sim as sim_utils
 from isaaclab.assets import Articulation, ArticulationCfg
@@ -47,6 +50,7 @@ class LeatherbackEnv(DirectRLEnv):
         self._steering_dof_idx, _ = self.leatherback.find_joints(self.cfg.steering_dof_name)
         self._throttle_state = torch.zeros((self.num_envs,4), device=self.device, dtype=torch.float32)
         self._steering_state = torch.zeros((self.num_envs,2), device=self.device, dtype=torch.float32)
+        self._last_actions = torch.zeros((self.num_envs, 2), device=self.device, dtype=torch.float32)
         self._goal_reached = torch.zeros((self.num_envs), device=self.device, dtype=torch.int32)
         self.task_completed = torch.zeros((self.num_envs), device=self.device, dtype=torch.bool)
         self._num_goals = 10
@@ -61,6 +65,9 @@ class LeatherbackEnv(DirectRLEnv):
         self.heading_coefficient = 0.25
         self.heading_progress_weight = 0.05
         self._target_index = torch.zeros((self.num_envs), device=self.device, dtype=torch.int32)
+        
+        # Setup CSV logging for instability detection
+        self._setup_instability_logging()
 
     def _setup_scene(self):
         # Create a large ground plane without grid
@@ -98,8 +105,11 @@ class LeatherbackEnv(DirectRLEnv):
         steering_scale = 0.1
         steering_max = 0.75
 
+        # Store actions for debugging
+        self._last_actions = actions.clone()
+
         self._throttle_action = actions[:, 0].repeat_interleave(4).reshape((-1, 4)) * throttle_scale
-        self.throttle_action = torch.clamp(self._throttle_action, -throttle_max, throttle_max)
+        self._throttle_action = torch.clamp(self._throttle_action, -throttle_max, throttle_max)
         self._throttle_state = self._throttle_action
         
         self._steering_action = actions[:, 1].repeat_interleave(2).reshape((-1, 2)) * steering_scale
@@ -138,6 +148,14 @@ class LeatherbackEnv(DirectRLEnv):
         )
         
         if torch.any(obs.isnan()):
+            # Log detailed instability data to CSV
+            self._log_instability_to_csv(obs)
+            
+            # Brief console notification
+            nan_envs = torch.any(obs.isnan(), dim=1)
+            affected_envs = torch.sum(nan_envs).item()
+            print(f"[INSTABILITY] Step {self.common_step_counter}: {affected_envs}/{self.num_envs} envs affected. Data logged to CSV.")
+            
             raise ValueError("Observations cannot be NAN")
 
         return {"policy": obs}
@@ -219,3 +237,94 @@ class LeatherbackEnv(DirectRLEnv):
         )
         self._heading_error = torch.atan2(torch.sin(target_heading_w - heading), torch.cos(target_heading_w - heading))
         self._previous_heading_error = self._heading_error.clone()
+
+    def _setup_instability_logging(self):
+        """Setup CSV logging for instability detection and analysis."""
+        timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        log_dir = "logs/instability_analysis"
+        os.makedirs(log_dir, exist_ok=True)
+        
+        csv_filename = f"instability_analysis_{timestamp}.csv"
+        self._instability_csv_path = os.path.join(log_dir, csv_filename)
+        self._instability_csv_file = None
+        self._instability_csv_writer = None
+        self._csv_initialized = False
+        print(f"[INFO] Instability logging setup: {self._instability_csv_path}")
+    
+    def _log_instability_to_csv(self, obs):
+        """Log detailed instability data to CSV file."""
+        if self._instability_csv_file is None:
+            self._instability_csv_file = open(self._instability_csv_path, 'w', newline='')
+        
+        if not self._csv_initialized:
+            # Initialize CSV headers
+            headers = [
+                "step", "timestamp",
+                # Action statistics
+                "raw_action_min", "raw_action_max", "raw_action_mean", "raw_action_std",
+                "throttle_action_min", "throttle_action_max", "throttle_action_mean",
+                "steering_action_min", "steering_action_max", "steering_action_mean",
+                # Physics state
+                "root_pos_min", "root_pos_max", "root_pos_mean",
+                "root_vel_min", "root_vel_max", "root_vel_mean",
+                "root_ang_vel_min", "root_ang_vel_max", "root_ang_vel_mean",
+                # Observation components
+                "position_error_min", "position_error_max", "position_error_nan_count",
+                "heading_error_min", "heading_error_max", "heading_error_nan_count", 
+                "lin_vel_nan_count", "ang_vel_nan_count",
+                # Environment info
+                "affected_envs", "total_envs", "first_nan_env_id"
+            ]
+            
+            self._instability_csv_writer = csv.writer(self._instability_csv_file)
+            self._instability_csv_writer.writerow(headers)
+            self._csv_initialized = True
+        
+        # Collect data
+        nan_envs = torch.any(obs.isnan(), dim=1)
+        affected_envs = torch.sum(nan_envs).item()
+        first_nan_env = torch.where(nan_envs)[0][0].item() if affected_envs > 0 else -1
+        
+        # Safe min/max calculations that handle NaN values
+        def safe_min_max_mean(tensor):
+            valid_tensor = tensor[~tensor.isnan()]
+            if len(valid_tensor) > 0:
+                return valid_tensor.min().item(), valid_tensor.max().item(), valid_tensor.mean().item()
+            return float('nan'), float('nan'), float('nan')
+        
+        raw_actions_min, raw_actions_max, raw_actions_mean = safe_min_max_mean(self._last_actions)
+        throttle_min, throttle_max, throttle_mean = safe_min_max_mean(self._throttle_action)
+        steering_min, steering_max, steering_mean = safe_min_max_mean(self._steering_action)
+        
+        pos_min, pos_max, pos_mean = safe_min_max_mean(self.leatherback.data.root_pos_w)
+        vel_min, vel_max, vel_mean = safe_min_max_mean(self.leatherback.data.root_lin_vel_b)
+        ang_vel_min, ang_vel_max, ang_vel_mean = safe_min_max_mean(self.leatherback.data.root_ang_vel_w)
+        
+        pos_err_min, pos_err_max, _ = safe_min_max_mean(self._position_error)
+        head_err_min, head_err_max, _ = safe_min_max_mean(self.target_heading_error)
+        
+        # Write data row
+        row_data = [
+            self.common_step_counter, datetime.datetime.now().isoformat(),
+            raw_actions_min, raw_actions_max, raw_actions_mean, self._last_actions.std().item(),
+            throttle_min, throttle_max, throttle_mean,
+            steering_min, steering_max, steering_mean,
+            pos_min, pos_max, pos_mean,
+            vel_min, vel_max, vel_mean,
+            ang_vel_min, ang_vel_max, ang_vel_mean,
+            pos_err_min, pos_err_max, torch.sum(self._position_error.isnan()).item(),
+            head_err_min, head_err_max, torch.sum(self.target_heading_error.isnan()).item(),
+            torch.sum(self.leatherback.data.root_lin_vel_b.isnan()).item(),
+            torch.sum(self.leatherback.data.root_ang_vel_w.isnan()).item(),
+            affected_envs, self.num_envs, first_nan_env
+        ]
+        
+        self._instability_csv_writer.writerow(row_data)
+        self._instability_csv_file.flush()  # Ensure data is written immediately
+
+    def close(self):
+        """Clean up resources including CSV logging."""
+        if hasattr(self, '_instability_csv_file') and self._instability_csv_file is not None:
+            self._instability_csv_file.close()
+            print(f"[INFO] Instability CSV logging closed: {self._instability_csv_path}")
+        super().close()
