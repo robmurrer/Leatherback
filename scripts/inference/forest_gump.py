@@ -59,6 +59,29 @@ def find_latest_observations():
     
     # Load the CSV data
     df = pd.read_csv(latest_obs_file)
+    
+    # Validate that the CSV has the expected format
+    expected_obs_cols = [
+        "obs_0_position_error",
+        "obs_1_heading_cos", 
+        "obs_2_heading_sin",
+        "obs_3_linear_vel_x",
+        "obs_4_linear_vel_y", 
+        "obs_5_angular_vel_z",
+        "obs_6_throttle_state",
+        "obs_7_steering_state"
+    ]
+    expected_action_cols = [
+        "action_0_throttle",
+        "action_1_steering"
+    ]
+    required_cols = ['timestep', 'sim_time'] + expected_obs_cols + expected_action_cols
+    
+    missing_cols = [col for col in required_cols if col not in df.columns]
+    if missing_cols:
+        raise ValueError(f"CSV file missing required columns: {missing_cols}")
+    
+    print(f"CSV validation passed: {len(df)} rows, columns: {df.columns.tolist()}")
     return df
 
 # Load latest policy and observations
@@ -66,10 +89,11 @@ policy_path = find_latest_policy()
 obs_df = find_latest_observations()
 
 print(f"Loaded {len(obs_df)} observation rows")
-print(f"Observation columns: {obs_df.columns.tolist()}")
 
-# Global observation index
+# Global observation index and simulation timing
 obs_index = 0
+current_sim_time = 0.0
+current_obs_data = None  # Cache current observation data
 #/home/goat/Documents/GitHub/Leatherback/source/Leatherback/Leatherback/tasks/direct/leatherback/custom_assets/leatherback_simple_better.usd
 #relative_path = os.path.join("..", "leatherback")
 relative_path = os.path.join("../..", "source", "Leatherback", "Leatherback", "tasks", "direct", "leatherback", "custom_assets")
@@ -81,44 +105,69 @@ sess = rt.InferenceSession(policy_path)
 input_name = sess.get_inputs()[0].name
 label_name = sess.get_outputs()[0].name
 
-def get_observation_data():
-    """Get the next observation from the loaded data"""
-    global obs_index
+def get_observation_data(sim_time):
+    """Get observation data for the current simulation time, game loop style"""
+    global obs_index, current_obs_data
     
-    if obs_index >= len(obs_df):
-        obs_index = 0  # Loop back to beginning
+    # If we don't have current observation data or need to advance to next observation
+    if current_obs_data is None or sim_time >= current_obs_data['next_sim_time']:
+        # Check if we need to advance to next observation
+        if obs_index >= len(obs_df):
+            obs_index = 0  # Loop back to beginning
+        
+        row = obs_df.iloc[obs_index]
+        
+        # Determine when to advance to next observation
+        next_sim_time = row['sim_time'] + (obs_df.iloc[obs_index + 1]['sim_time'] - row['sim_time']) if obs_index + 1 < len(obs_df) else float('inf')
+        
+        current_obs_data = {
+            'obs': [
+                row["obs_0_position_error"],
+                row["obs_1_heading_cos"], 
+                row["obs_2_heading_sin"],
+                row["obs_3_linear_vel_x"],
+                row["obs_4_linear_vel_y"], 
+                row["obs_5_angular_vel_z"],
+                row["obs_6_throttle_state"],
+                row["obs_7_steering_state"]
+            ],
+            'logged_actions': [row["action_0_throttle"], row["action_1_steering"]],
+            'timestep': row['timestep'],
+            'sim_time': row['sim_time'],
+            'next_sim_time': next_sim_time
+        }
+        
+        obs_index += 1
     
-    row = obs_df.iloc[obs_index]
-    obs_index += 1
-    
-    # Extract observation based on file format
-    if 'obs_0' in obs_df.columns:
-        # RSL-RL format: obs_0 to obs_7
-        obs = [row[f'obs_{i}'] for i in range(8)]
-    else:
-        # Source format: position_error, heading_error_cos, heading_error_sin, root_lin_vel_x, root_lin_vel_y, root_ang_vel_z, throttle_state, steering_state
-        obs = [
-            row['position_error'],
-            row['heading_error_cos'], 
-            row['heading_error_sin'],
-            row['root_lin_vel_x'],
-            row['root_lin_vel_y'],
-            0.0,  # vel_z (not in source format)
-            0.0,  # omega_x (not in source format) 
-            row['root_ang_vel_z']
-        ]
-    
-    return np.array([obs], dtype=np.float32)
+    # Return the current observation data
+    return (np.array([current_obs_data['obs']], dtype=np.float32), 
+            current_obs_data['timestep'], 
+            current_obs_data['sim_time'], 
+            current_obs_data['logged_actions'])
 
 # pos_error, heading_error_cos, heading_error_sin, vel_x, vel_y, vel_z, omega_x, omega_y
 def on_physics_step(step_size) -> None:
-    # Get real observation data from loaded files
-    X_test = get_observation_data()
-    print(f"Observation: {X_test}")
+    global current_sim_time
+    
+    # Accumulate simulation time
+    current_sim_time += step_size
+    
+    # Get observation data for current sim time (will reuse same data until time threshold reached)
+    X_test, timestep, csv_sim_time, logged_actions = get_observation_data(current_sim_time)
+    print(f"Current Sim Time: {current_sim_time:.3f}s, CSV Timestep: {timestep}, CSV Sim Time: {csv_sim_time:.3f}s")
+    print(f"Observation: {X_test.flatten()}")
     
     # Run ONNX inference
     pred_onx = sess.run([label_name], {input_name: X_test})[0]
     print("prediction: " + pred_onx.__str__())
+    
+    # Assert that predicted actions match logged actions
+    predicted_actions = [pred_onx[0, 0], pred_onx[0, 1]]
+    action_tolerance = 1e-5  # Increased tolerance for floating point precision differences
+    for i, (pred, logged) in enumerate(zip(predicted_actions, logged_actions)):
+        assert abs(pred - logged) < action_tolerance, f"Action {i} mismatch: predicted={pred}, logged={logged}"
+    
+    print(f"✓ Actions match logged values: throttle={predicted_actions[0]:.6f}, steering={predicted_actions[1]:.6f}")
     
     # Action processing (same as in the training environment)
     throttle_scale = 10

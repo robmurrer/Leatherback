@@ -15,7 +15,7 @@ class LeatherbackPPORunnerCfg(RslRlOnPolicyRunnerCfg):
     num_steps_per_env = 32  # rollouts in SKRL
     max_iterations = 300    # 9600 timesteps / 32 rollouts = 300 iterations
     save_interval = 50
-    experiment_name = "leatherback_direct_new_entropy"
+    experiment_name = "leatherback_direct"
     empirical_normalization = False
     
     policy = RslRlPpoActorCriticCfg(
@@ -36,6 +36,7 @@ class LeatherbackPPORunnerCfg(RslRlOnPolicyRunnerCfg):
         num_mini_batches=8,      # mini_batches in SKRL
         learning_rate=5e-4,      # learning_rate in SKRL
         schedule="adaptive",     # learning_rate_scheduler: KLAdaptiveLR
+        #schedule="linear",     # learning_rate_scheduler: KLAdaptiveLR
         gamma=0.99,              # discount_factor in SKRL
         lam=0.95,                # lambda in SKRL
         desired_kl=0.008,        # kl_threshold in SKRL

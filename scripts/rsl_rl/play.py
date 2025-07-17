@@ -189,9 +189,21 @@ def main():
                         obs_flat = obs.cpu().numpy().flatten() if isinstance(obs, torch.Tensor) else np.array(obs).flatten()
                         actions_flat = actions.cpu().numpy().flatten() if isinstance(actions, torch.Tensor) else np.array(actions).flatten()
                         
-                        # create headers
-                        obs_headers = [f"obs_{i}" for i in range(len(obs_flat))]
-                        action_headers = [f"action_{i}" for i in range(len(actions_flat))]
+                        # create headers with meaningful names
+                        obs_headers = [
+                            "obs_0_position_error",
+                            "obs_1_heading_cos", 
+                            "obs_2_heading_sin",
+                            "obs_3_linear_vel_x",
+                            "obs_4_linear_vel_y", 
+                            "obs_5_angular_vel_z",
+                            "obs_6_throttle_state",
+                            "obs_7_steering_state"
+                        ]
+                        action_headers = [
+                            "action_0_throttle",
+                            "action_1_steering"
+                        ]
                         headers = ["timestep", "sim_time"] + obs_headers + action_headers
                         
                         csv_writer = csv.writer(csv_file)
