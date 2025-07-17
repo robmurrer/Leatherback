@@ -15,7 +15,7 @@ class LeatherbackPPORunnerCfg(RslRlOnPolicyRunnerCfg):
     num_steps_per_env = 32  # rollouts in SKRL
     max_iterations = 300    # 9600 timesteps / 32 rollouts = 300 iterations
     save_interval = 50
-    experiment_name = "leatherback_direct"
+    experiment_name = "leatherback_direct_new_entropy"
     empirical_normalization = False
     
     policy = RslRlPpoActorCriticCfg(
@@ -31,7 +31,7 @@ class LeatherbackPPORunnerCfg(RslRlOnPolicyRunnerCfg):
         value_loss_coef=2.0,     # value_loss_scale in SKRL
         use_clipped_value_loss=True,  # clip_predicted_values in SKRL
         clip_param=0.2,          # ratio_clip in SKRL
-        entropy_coef=0.0,        # entropy_loss_scale in SKRL
+        entropy_coef=0.2,        # entropy_loss_scale in SKRL
         num_learning_epochs=8,   # learning_epochs in SKRL
         num_mini_batches=8,      # mini_batches in SKRL
         learning_rate=5e-4,      # learning_rate in SKRL
