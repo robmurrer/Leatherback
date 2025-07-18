@@ -10,6 +10,20 @@ import numpy as np
 import os
 from pathlib import Path
 import seaborn as sns
+import base64
+from io import BytesIO
+
+def plot_to_base64(fig):
+    """Convert matplotlib figure to base64 string for HTML embedding"""
+    buffer = BytesIO()
+    fig.savefig(buffer, format='png', dpi=300, bbox_inches='tight')
+    buffer.seek(0)
+    plot_data = buffer.getvalue()
+    buffer.close()
+    
+    # Encode to base64
+    plot_base64 = base64.b64encode(plot_data).decode()
+    return f"data:image/png;base64,{plot_base64}"
 
 def plot_csv_data(csv_path, show_plots=True):
     """
@@ -20,11 +34,13 @@ def plot_csv_data(csv_path, show_plots=True):
     print(f"Loading data from: {csv_path}")
     df = pd.read_csv(csv_path)
     
-    # Extract observations and actions columns
+    # Extract observations, actions, and position columns
     obs_columns = [col for col in df.columns if col.startswith('obs_')]
     action_columns = [col for col in df.columns if col.startswith('action_')]
+    position_columns = [col for col in df.columns if col.startswith('pos_')]
     
     print(f"Found {len(obs_columns)} observation dimensions and {len(action_columns)} action dimensions")
+    print(f"Found {len(position_columns)} position coordinates: {position_columns}")
     print(f"Total timesteps: {len(df)}")
     
     # Create output directory based on CSV location and timestamp
@@ -37,6 +53,9 @@ def plot_csv_data(csv_path, show_plots=True):
     # Set up the plotting style
     plt.style.use('seaborn-v0_8')
     sns.set_palette("husl")
+    
+    # Dictionary to store plot paths for HTML embedding
+    plot_images = {}
     
     # Create separate plots
     
@@ -52,6 +71,9 @@ def plot_csv_data(csv_path, show_plots=True):
         ax.set_title(f'Observations Over Time ({len(plot_obs)} dimensions)')
         ax.legend()
         ax.grid(True, alpha=0.3)
+        
+        # Save plot and get base64
+        plot_images['observations'] = plot_to_base64(fig)
         
         obs_plot_path = os.path.join(output_dir, 'observations_timeseries.png')
         plt.savefig(obs_plot_path, dpi=300, bbox_inches='tight')
@@ -70,14 +92,114 @@ def plot_csv_data(csv_path, show_plots=True):
         ax.legend()
         ax.grid(True, alpha=0.3)
         
+        # Save plot and get base64
+        plot_images['actions'] = plot_to_base64(fig)
+        
         act_plot_path = os.path.join(output_dir, 'actions_timeseries.png')
         plt.savefig(act_plot_path, dpi=300, bbox_inches='tight')
         plt.close()
         print(f"Actions time series saved to: {act_plot_path}")
     
-    # Plot 3: Combined boxplots
-    if obs_columns or action_columns:
-        fig, axes = plt.subplots(1, 2, figsize=(16, 6))
+    # Plot 3: Robot coordinates (X, Y, Z positions)
+    if position_columns:
+        # 3D trajectory plot
+        if 'pos_x' in df.columns and 'pos_y' in df.columns and 'pos_z' in df.columns:
+            fig = plt.figure(figsize=(15, 5))
+            
+            # 3D trajectory
+            ax1 = fig.add_subplot(131, projection='3d')
+            ax1.plot(df['pos_x'], df['pos_y'], df['pos_z'], 'b-', alpha=0.7, linewidth=1)
+            ax1.scatter(df['pos_x'].iloc[0], df['pos_y'].iloc[0], df['pos_z'].iloc[0], 
+                       color='green', s=100, label='Start')
+            ax1.scatter(df['pos_x'].iloc[-1], df['pos_y'].iloc[-1], df['pos_z'].iloc[-1], 
+                       color='red', s=100, label='End')
+            ax1.set_xlabel('X Position (m)')
+            ax1.set_ylabel('Y Position (m)')
+            ax1.set_zlabel('Z Position (m)')
+            ax1.set_title('3D Robot Trajectory')
+            ax1.legend()
+            
+            # XY trajectory (top view)
+            ax2 = fig.add_subplot(132)
+            ax2.plot(df['pos_x'], df['pos_y'], 'b-', alpha=0.7, linewidth=1)
+            ax2.scatter(df['pos_x'].iloc[0], df['pos_y'].iloc[0], color='green', s=100, label='Start')
+            ax2.scatter(df['pos_x'].iloc[-1], df['pos_y'].iloc[-1], color='red', s=100, label='End')
+            ax2.set_xlabel('X Position (m)')
+            ax2.set_ylabel('Y Position (m)')
+            ax2.set_title('XY Trajectory (Top View)')
+            ax2.legend()
+            ax2.grid(True, alpha=0.3)
+            ax2.axis('equal')
+            
+            # Z position over time
+            ax3 = fig.add_subplot(133)
+            ax3.plot(df['sim_time'], df['pos_z'], 'r-', linewidth=2, label='Z Position')
+            ax3.set_xlabel('Simulation Time (s)')
+            ax3.set_ylabel('Z Position (m)')
+            ax3.set_title('Z Position Over Time')
+            ax3.legend()
+            ax3.grid(True, alpha=0.3)
+            
+            # Highlight Z position issues
+            z_mean = df['pos_z'].mean()
+            z_std = df['pos_z'].std()
+            z_threshold = 3 * z_std  # 3-sigma rule
+            
+            if z_std > 0.01:  # If there's significant Z variation
+                ax3.axhline(y=z_mean + z_threshold, color='orange', linestyle='--', alpha=0.7, label=f'+3σ ({z_mean + z_threshold:.3f})')
+                ax3.axhline(y=z_mean - z_threshold, color='orange', linestyle='--', alpha=0.7, label=f'-3σ ({z_mean - z_threshold:.3f})')
+                ax3.axhline(y=z_mean, color='green', linestyle='--', alpha=0.7, label=f'Mean ({z_mean:.3f})')
+                ax3.legend()
+            
+            plt.tight_layout()
+            
+            # Save plot and get base64
+            plot_images['coordinates'] = plot_to_base64(fig)
+            
+            coord_plot_path = os.path.join(output_dir, 'robot_coordinates.png')
+            plt.savefig(coord_plot_path, dpi=300, bbox_inches='tight')
+            plt.close()
+            print(f"Robot coordinates plot saved to: {coord_plot_path}")
+        
+        # Individual coordinate time series
+        fig, axes = plt.subplots(3, 1, figsize=(12, 10), sharex=True)
+        
+        for i, coord in enumerate(['pos_x', 'pos_y', 'pos_z']):
+            if coord in df.columns:
+                axes[i].plot(df['sim_time'], df[coord], linewidth=2, label=coord.upper())
+                axes[i].set_ylabel(f'{coord.upper()} (m)')
+                axes[i].set_title(f'{coord.upper()} Position Over Time')
+                axes[i].grid(True, alpha=0.3)
+                axes[i].legend()
+                
+                # Add statistics to the plot
+                mean_val = df[coord].mean()
+                std_val = df[coord].std()
+                min_val = df[coord].min()
+                max_val = df[coord].max()
+                
+                axes[i].axhline(y=mean_val, color='red', linestyle='--', alpha=0.7, 
+                               label=f'Mean: {mean_val:.3f}m')
+                
+                # Add text box with statistics
+                stats_text = f'Mean: {mean_val:.3f}m\nStd: {std_val:.3f}m\nMin: {min_val:.3f}m\nMax: {max_val:.3f}m\nRange: {max_val-min_val:.3f}m'
+                axes[i].text(0.02, 0.98, stats_text, transform=axes[i].transAxes, 
+                            verticalalignment='top', bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8))
+        
+        axes[-1].set_xlabel('Simulation Time (s)')
+        plt.tight_layout()
+        
+        # Save plot and get base64
+        plot_images['coordinates_timeseries'] = plot_to_base64(fig)
+        
+        coord_timeseries_path = os.path.join(output_dir, 'coordinates_timeseries.png')
+        plt.savefig(coord_timeseries_path, dpi=300, bbox_inches='tight')
+        plt.close()
+        print(f"Coordinates time series saved to: {coord_timeseries_path}")
+    
+    # Plot 4: Combined boxplots (now including positions)
+    if obs_columns or action_columns or position_columns:
+        fig, axes = plt.subplots(1, 3, figsize=(20, 6))
         
         # Observations boxplot
         if obs_columns:
@@ -112,57 +234,162 @@ def plot_csv_data(csv_path, show_plots=True):
             axes[1].grid(True, alpha=0.3)
             axes[1].tick_params(axis='x', rotation=45, labelsize=8)
         
+        # Position coordinates boxplot
+        if position_columns:
+            position_data = [df[col] for col in position_columns]
+            box_plot3 = axes[2].boxplot(position_data, labels=position_columns, patch_artist=True)
+            
+            colors3 = plt.cm.Set1(np.linspace(0, 1, len(position_columns)))
+            for patch, color in zip(box_plot3['boxes'], colors3):
+                patch.set_facecolor(color)
+                patch.set_alpha(0.7)
+            
+            axes[2].set_xlabel('Position Coordinates')
+            axes[2].set_ylabel('Values (m)')
+            axes[2].set_title('Position Coordinates Distribution')
+            axes[2].grid(True, alpha=0.3)
+            axes[2].tick_params(axis='x', rotation=45, labelsize=8)
+            
+            # Add statistics text for Z position if it exists
+            if 'pos_z' in df.columns:
+                z_stats = f'Z Stats:\nMean: {df["pos_z"].mean():.3f}m\nStd: {df["pos_z"].std():.3f}m\nRange: {df["pos_z"].max() - df["pos_z"].min():.3f}m'
+                axes[2].text(0.02, 0.98, z_stats, transform=axes[2].transAxes, 
+                            verticalalignment='top', bbox=dict(boxstyle='round', facecolor='yellow', alpha=0.8))
+        
         plt.tight_layout()
+        
+        # Save plot and get base64
+        plot_images['boxplots'] = plot_to_base64(fig)
+        
         boxplot_path = os.path.join(output_dir, 'boxplots.png')
         plt.savefig(boxplot_path, dpi=300, bbox_inches='tight')
         plt.close()
         print(f"Boxplots saved to: {boxplot_path}")
     
-    # Generate HTML table with real data
-    generate_html_table(df, obs_columns, action_columns, output_dir, timestamp)
+    # Generate HTML table with real data and embedded plots
+    generate_html_table(df, obs_columns, action_columns, position_columns, output_dir, timestamp, plot_images)
     
     return output_dir
 
-def generate_html_table(df, obs_columns, action_columns, output_dir, timestamp):
-    """Generate HTML file with real data table"""
+def generate_html_table(df, obs_columns, action_columns, position_columns, output_dir, timestamp, plot_images):
+    """Generate HTML file with real data table and embedded plots"""
     
     html_content = f"""
     <!DOCTYPE html>
     <html>
     <head>
-        <title>Observations and Actions Data - {timestamp}</title>
+        <meta charset="UTF-8">
+        <title>Robot Analysis - {timestamp}</title>
         <style>
-            body {{ font-family: Arial, sans-serif; margin: 20px; }}
-            h1 {{ color: #333; }}
-            h2 {{ color: #666; margin-top: 30px; }}
-            table {{ border-collapse: collapse; width: 100%; margin-top: 20px; }}
+            body {{ font-family: Arial, sans-serif; margin: 20px; background-color: #f8f9fa; }}
+            h1 {{ color: #333; text-align: center; }}
+            h2 {{ color: #666; margin-top: 30px; border-bottom: 2px solid #ddd; padding-bottom: 5px; }}
+            table {{ border-collapse: collapse; width: 100%; margin-top: 20px; background-color: white; }}
             th, td {{ border: 1px solid #ddd; padding: 8px; text-align: center; }}
             th {{ background-color: #f2f2f2; font-weight: bold; }}
             .obs-col {{ background-color: #e3f2fd; }}
             .act-col {{ background-color: #fff3e0; }}
+            .pos-col {{ background-color: #e8f5e8; }}
             .stats-table {{ margin-top: 20px; }}
-            .info {{ background-color: #f8f9fa; padding: 15px; border-radius: 5px; margin: 20px 0; }}
+            .info {{ background-color: white; padding: 15px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #007bff; }}
             .data-table {{ max-height: 600px; overflow-y: auto; }}
+            .plot-container {{ text-align: center; margin: 20px 0; background-color: white; padding: 20px; border-radius: 5px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }}
+            .plot-container img {{ max-width: 100%; height: auto; border: 1px solid #ddd; border-radius: 4px; }}
+            .warning {{ color: red; font-weight: bold; }}
         </style>
     </head>
     <body>
-        <h1>Observations and Actions Analysis - {timestamp}</h1>
+        <h1>🤖 Robot Analysis Report - {timestamp}</h1>
         
         <div class="info">
-            <h3>Dataset Info</h3>
+            <h3>📊 Dataset Summary</h3>
             <p><strong>Total Timesteps:</strong> {len(df)}</p>
             <p><strong>Simulation Duration:</strong> {df['sim_time'].iloc[-1]:.3f} seconds</p>
             <p><strong>Observations:</strong> {len(obs_columns)} dimensions</p>
             <p><strong>Actions:</strong> {len(action_columns)} dimensions</p>
+            <p><strong>Position Coordinates:</strong> {len(position_columns)} dimensions</p>
             <p><strong>Average Step Time:</strong> {df['sim_time'].iloc[-1] / len(df):.6f} seconds</p>
         </div>
         
-        <h2>Statistics Summary</h2>
+        <h2>Position Coordinate Analysis</h2>
+        <div class="info">
+    """
+    
+    # Add position coordinate analysis
+    if position_columns:
+        for pos_col in position_columns:
+            if pos_col in df.columns:
+                mean_val = df[pos_col].mean()
+                std_val = df[pos_col].std()
+                min_val = df[pos_col].min()
+                max_val = df[pos_col].max()
+                range_val = max_val - min_val
+                
+                html_content += f"""
+            <p><strong>{pos_col.upper()}:</strong> Mean={mean_val:.3f}m, Std={std_val:.3f}m, Range={range_val:.3f}m (Min={min_val:.3f}m, Max={max_val:.3f}m)</p>
+                """
+                
+                # Highlight potential Z position issues
+                if pos_col == 'pos_z' and (std_val > 0.1 or range_val > 0.2):
+                    html_content += f"""
+            <p class="warning">⚠️ Z Position Issue Detected: High variation in Z coordinate (Std={std_val:.3f}m, Range={range_val:.3f}m)</p>
+                    """
+    
+    html_content += """
+        </div>
+        
+        <h2>📈 Visualization Plots</h2>
+    """
+    
+    # Add embedded plots
+    if 'observations' in plot_images:
+        html_content += f"""
+        <div class="plot-container">
+            <h3>Observations Time Series</h3>
+            <img src="{plot_images['observations']}" alt="Observations Time Series">
+        </div>
+        """
+    
+    if 'actions' in plot_images:
+        html_content += f"""
+        <div class="plot-container">
+            <h3>Actions Time Series</h3>
+            <img src="{plot_images['actions']}" alt="Actions Time Series">
+        </div>
+        """
+    
+    if 'coordinates' in plot_images:
+        html_content += f"""
+        <div class="plot-container">
+            <h3>Robot 3D Trajectory & Position Analysis</h3>
+            <img src="{plot_images['coordinates']}" alt="Robot Coordinates">
+        </div>
+        """
+    
+    if 'coordinates_timeseries' in plot_images:
+        html_content += f"""
+        <div class="plot-container">
+            <h3>Position Coordinates Over Time</h3>
+            <img src="{plot_images['coordinates_timeseries']}" alt="Coordinates Time Series">
+        </div>
+        """
+    
+    if 'boxplots' in plot_images:
+        html_content += f"""
+        <div class="plot-container">
+            <h3>Data Distribution (Box Plots)</h3>
+            <img src="{plot_images['boxplots']}" alt="Box Plots">
+        </div>
+        """
+    
+    html_content += """
+        
+        <h2>📊 Statistics Summary</h2>
         <div class="stats-table">
     """
     
     # Add statistics table
-    all_columns = obs_columns + action_columns
+    all_columns = obs_columns + action_columns + position_columns
     html_content += """
             <table>
                 <tr>
@@ -179,8 +406,18 @@ def generate_html_table(df, obs_columns, action_columns, output_dir, timestamp):
     """
     
     for col in all_columns:
-        var_type = 'Observation' if col.startswith('obs_') else 'Action'
-        css_class = 'obs-col' if col.startswith('obs_') else 'act-col'
+        if col.startswith('obs_'):
+            var_type = 'Observation'
+            css_class = 'obs-col'
+        elif col.startswith('action_'):
+            var_type = 'Action'
+            css_class = 'act-col'
+        elif col.startswith('pos_'):
+            var_type = 'Position'
+            css_class = 'pos-col'
+        else:
+            var_type = 'Other'
+            css_class = ''
         html_content += f"""
                 <tr>
                     <td class="{css_class}"><strong>{col}</strong></td>
@@ -212,6 +449,8 @@ def generate_html_table(df, obs_columns, action_columns, output_dir, timestamp):
         html_content += f'<th class="obs-col">{col}</th>'
     for col in action_columns:
         html_content += f'<th class="act-col">{col}</th>'
+    for col in position_columns:
+        html_content += f'<th class="pos-col">{col}</th>'
     
     html_content += "</tr>"
     
@@ -227,6 +466,8 @@ def generate_html_table(df, obs_columns, action_columns, output_dir, timestamp):
             html_content += f'<td class="obs-col">{row[col]:.6f}</td>'
         for col in action_columns:
             html_content += f'<td class="act-col">{row[col]:.6f}</td>'
+        for col in position_columns:
+            html_content += f'<td class="pos-col">{row[col]:.6f}</td>'
         
         html_content += "</tr>"
     
@@ -235,21 +476,23 @@ def generate_html_table(df, obs_columns, action_columns, output_dir, timestamp):
         </div>
         
         <div class="info">
-            <p><em>Generated on: {timestamp}</em></p>
-            <p><em>Observations are highlighted in blue, Actions in orange</em></p>
+            <p><em>Generated on: """ + timestamp + """</em></p>
+            <p><em>Observations are highlighted in blue, Actions in orange, Positions in green</em></p>
+            <p><em>All plots are embedded as high-resolution images for analysis</em></p>
         </div>
         
     </body>
     </html>
     """
     
-    # Save HTML file
-    html_path = os.path.join(output_dir, 'data_table.html')
-    with open(html_path, 'w') as f:
+    # Save HTML file with timestamp-based name
+    html_filename = f"robot_analysis_{timestamp}.html"
+    html_path = os.path.join(output_dir, html_filename)
+    with open(html_path, 'w', encoding='utf-8') as f:
         f.write(html_content)
     
-    print(f"HTML data table saved to: {html_path}")
-    print(f"Open in browser: file://{os.path.abspath(html_path)}")
+    print(f"🎉 Complete HTML analysis report saved to: {html_path}")
+    print(f"🌐 Open in browser: file://{os.path.abspath(html_path)}")
 
 def find_latest_csv(logs_dir):
     """Find the most recently created CSV file in the logs directory"""

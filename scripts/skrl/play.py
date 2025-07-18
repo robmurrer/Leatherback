@@ -46,16 +46,11 @@ parser.add_argument(
     help="The RL algorithm used for training the skrl agent.",
 )
 parser.add_argument("--real-time", action="store_true", default=False, help="Run in real-time, if possible.")
-parser.add_argument("--log_csv", action="store_true", default=True, help="Log observations and actions to CSV.")
-parser.add_argument("--no_log_csv", action="store_true", default=False, help="Disable CSV logging.")
+# CSV logging is always enabled - removed CLI options
 
 # append AppLauncher cli args
 AppLauncher.add_app_launcher_args(parser)
 args_cli = parser.parse_args()
-
-# handle CSV logging flags
-if args_cli.no_log_csv:
-    args_cli.log_csv = False
 
 # always enable cameras to record video
 if args_cli.video:
@@ -141,19 +136,18 @@ def main():
         )
     log_dir = os.path.dirname(os.path.dirname(resume_path))
 
-    # setup CSV logging for observations and actions (if enabled)
+    # setup CSV logging for observations and actions (always enabled)
     csv_file = None
     csv_writer = None
     csv_initialized = False
     
-    if args_cli.log_csv:
-        timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        csv_dir = os.path.join(log_dir, "csv_logs")
-        os.makedirs(csv_dir, exist_ok=True)
-        csv_filename = f"observations_actions_{timestamp}.csv"
-        csv_path = os.path.join(csv_dir, csv_filename)
-        csv_file = open(csv_path, 'w', newline='')
-        print(f"[INFO] Logging observations and actions to: {csv_path}")
+    timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    csv_dir = os.path.join(log_dir, "csv_logs")
+    os.makedirs(csv_dir, exist_ok=True)
+    csv_filename = f"observations_actions_{timestamp}.csv"
+    csv_path = os.path.join(csv_dir, csv_filename)
+    csv_file = open(csv_path, 'w', newline='')
+    print(f"[INFO] Logging observations and actions to: {csv_path}")
 
     # create isaac environment
     env = gym.make(args_cli.task, cfg=env_cfg, render_mode="rgb_array" if args_cli.video else None)
@@ -214,11 +208,10 @@ def main():
                 else:
                     actions = outputs[-1].get("mean_actions", outputs[0])
                 # env stepping
-                obs, _, _, _, _ = env.step(actions)
+                obs, rewards, terminated, truncated, info = env.step(actions)
                 
-                # log observations and actions to CSV (if enabled)
-                if args_cli.log_csv:
-                    if not csv_initialized:
+                # log observations and actions to CSV (always enabled)
+                if not csv_initialized:
                         # initialize CSV headers based on actual data shapes
                         obs_flat = obs.cpu().numpy().flatten() if isinstance(obs, torch.Tensor) else np.array(obs).flatten()
                         actions_flat = actions.cpu().numpy().flatten() if isinstance(actions, torch.Tensor) else np.array(actions).flatten()
@@ -238,33 +231,65 @@ def main():
                             "action_0_throttle",
                             "action_1_steering"
                         ]
-                        headers = ["timestep", "sim_time"] + obs_headers + action_headers
+                        reset_headers = ["terminated", "truncated", "episode_reset"]
+                        # Add position headers for compatibility with forest_gump and plotting scripts
+                        position_headers = ["pos_x", "pos_y", "pos_z"] 
+                        headers = ["timestep", "sim_time"] + obs_headers + action_headers + reset_headers + position_headers
                         
                         csv_writer = csv.writer(csv_file)
                         csv_writer.writerow(headers)
                         csv_initialized = True
                         print(f"[INFO] CSV initialized with {len(obs_flat)} observations and {len(actions_flat)} actions")
-                    
-                    # write current step data
-                    obs_flat = obs.cpu().numpy().flatten() if isinstance(obs, torch.Tensor) else np.array(obs).flatten()
-                    actions_flat = actions.cpu().numpy().flatten() if isinstance(actions, torch.Tensor) else np.array(actions).flatten()
-                    sim_time = timestep * dt
-                    row_data = [timestep, sim_time] + obs_flat.tolist() + actions_flat.tolist()
-                    csv_writer.writerow(row_data)
                 
+                # write current step data
+                obs_flat = obs.cpu().numpy().flatten() if isinstance(obs, torch.Tensor) else np.array(obs).flatten()
+                actions_flat = actions.cpu().numpy().flatten() if isinstance(actions, torch.Tensor) else np.array(actions).flatten()
+                
+                # Check for any resets (terminated or truncated)
+                any_terminated = terminated.any().item() if isinstance(terminated, torch.Tensor) else any(terminated) if hasattr(terminated, '__iter__') else terminated
+                any_truncated = truncated.any().item() if isinstance(truncated, torch.Tensor) else any(truncated) if hasattr(truncated, '__iter__') else truncated
+                episode_reset = any_terminated or any_truncated
+                
+                # Get robot position safely through environment interface  
+                # Use environment state instead of direct robot access
+                try:
+                    # Try to get position from info dict first (most reliable)
+                    if 'robot_position' in info:
+                        pos = info['robot_position'][0].cpu().numpy() if isinstance(info['robot_position'], torch.Tensor) else info['robot_position'][0]
+                    # Fallback to environment unwrapped access (only if available)
+                    elif hasattr(env.unwrapped, 'leatherback') and hasattr(env.unwrapped.leatherback, 'data'):
+                        pos = env.unwrapped.leatherback.data.root_pos_w[0, :3].cpu().numpy()
+                    else:
+                        # Last resort: use zeros (but log the issue)
+                        pos = [0.0, 0.0, 0.0]
+                        if timestep == 0:  # Only warn once
+                            print(f"[WARNING] Could not access robot position - using fallback values")
+                except Exception as e:
+                    pos = [0.0, 0.0, 0.0]
+                    if timestep == 0:  # Only warn once  
+                        print(f"[WARNING] Error accessing robot position: {e} - using fallback values")
+                
+                sim_time = timestep * dt
+                row_data = [timestep, sim_time] + obs_flat.tolist() + actions_flat.tolist() + [any_terminated, any_truncated, episode_reset] + pos.tolist()
+                csv_writer.writerow(row_data)
+                
+                # Log reset information when it happens
+                if episode_reset:
+                    print(f"[INFO] Episode reset detected at step {timestep}: terminated={any_terminated}, truncated={any_truncated}")
+                
+            # Increment timestep counter
+            timestep += 1
+            
+            # Check exit conditions
             if args_cli.video:
-                timestep += 1
                 # exit the play loop after recording one video
-                if timestep == args_cli.video_length:
+                if timestep >= args_cli.video_length:
                     break
-            elif args_cli.log_csv:
-                timestep += 1
+            else:
                 # Exit after logging a reasonable number of steps (one episode worth)
                 if timestep >= 1000:  # Adjust this number based on typical episode length
                     print(f"[INFO] CSV logging completed after {timestep} steps.")
                     break
-            else:
-                timestep += 1
 
             # time delay for real-time evaluation
             sleep_time = dt - (time.time() - start_time)
@@ -272,10 +297,33 @@ def main():
                 time.sleep(sleep_time)
     
     finally:
-        # ensure CSV file is properly closed (if opened)
-        if args_cli.log_csv and csv_file:
+        # ensure CSV file is properly closed
+        if csv_file:
             csv_file.close()
             print(f"[INFO] CSV logging completed. {timestep} steps logged to {csv_path}")
+
+    # Generate plots automatically after play session
+    print("🎨 Automatically generating plots from collected data...")
+    try:
+        # Import and run the plotting script
+        import sys
+        script_dir = os.path.dirname(__file__)
+        plot_script_path = os.path.join(script_dir, "..", "plot_observations_actions.py")
+        if os.path.exists(plot_script_path):
+            # Add the script directory to Python path so we can import the plotting functions
+            sys.path.insert(0, os.path.dirname(plot_script_path))
+            
+            # Import the plotting function
+            from plot_observations_actions import plot_csv_data
+            
+            print(f"📊 Generating plots for: {csv_path}")
+            plot_csv_data(csv_path, show_plots=False)  # Don't show plots interactively
+            print("✅ Plots generated successfully!")
+        else:
+            print(f"⚠️ Plot script not found at: {plot_script_path}")
+    except Exception as e:
+        print(f"❌ Failed to generate plots: {e}")
+        print("You can manually run: python scripts/plot_observations_actions.py")
 
     # close the simulator
     env.close()
