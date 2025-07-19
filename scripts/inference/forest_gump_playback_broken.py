@@ -1,3 +1,24 @@
+"""
+⚠️  WARNING: THIS SCRIPT IS NOT WORKING PROPERLY ⚠️
+
+This forest_gump.py script attempts to validate ONNX model predictions against 
+logged CSV data, but encounters significant position deviations and simulation 
+instabilities.
+
+📋 For detailed analysis of the issues, see:
+   analysis_report_forest_gump_simulation.md
+
+🔧 Current problems:
+   - Large position deviations between expected and actual robot positions
+   - Simulation drift and timing synchronization issues
+   - Action/observation mismatches causing validation failures
+
+💡 Consider using the working play.py scripts instead for live demonstration
+   of the trained policies.
+
+TODO: Fix simulation synchronization or replace with proper demo script
+"""
+
 import os
 import numpy as np
 import pandas as pd
