@@ -100,9 +100,9 @@ class LeatherbackEnv(DirectRLEnv):
         light_cfg.func("/World/Light", light_cfg)
 
     def _pre_physics_step(self, actions: torch.Tensor) -> None:
-        throttle_scale = 10
+        throttle_scale = 10 # change to one acccording to chuck
         throttle_max = 50
-        steering_scale = 0.1
+        steering_scale = 0.01 # changing to divide by 1
         steering_max = 0.75
 
         # Store actions for debugging

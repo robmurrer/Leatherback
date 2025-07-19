@@ -58,7 +58,8 @@ LEATHERBACK_CFG = ArticulationCfg(
             effort_limit=40000.0,
             velocity_limit=100.0,
             stiffness=1000.0,
-            damping=0.0,
+            damping=0.0, # whyu is this zero!?!? changing this causes steering to be really impossible
+            # we need to goto full ackermann steering
         ),
     },
 )
