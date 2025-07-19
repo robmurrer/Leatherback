@@ -13,35 +13,32 @@ class LeatherbackPPORunnerCfg(RslRlOnPolicyRunnerCfg):
     
     # Training parameters (matching SKRL config exactly)
     num_steps_per_env = 32  # rollouts in SKRL
-    max_iterations = 500    # Increased for better convergence
+    max_iterations = 300    # 9600 timesteps / 32 rollouts = 300 iterations
     save_interval = 50
     experiment_name = "leatherback_direct"
     empirical_normalization = False
     
-    # Note: Action clipping will be handled in play.py for inference
-    # clip_actions = True  # Disabled due to type incompatibility with RSL-RL wrapper
-    
     policy = RslRlPpoActorCriticCfg(
-        # Network architecture - Reduced noise for smoother actions
-        init_noise_std=0.3,  # Reduced from 1.0 to prevent erratic exploration
-        actor_hidden_dims=[64, 64],  # Increased from [32, 32] for better policy representation
-        critic_hidden_dims=[64, 64],  # Increased for better value estimation
+        # Network architecture (matching SKRL: [32, 32])
+        init_noise_std=1.0,  # Back to original value
+        actor_hidden_dims=[32, 32],
+        critic_hidden_dims=[32, 32],
         activation="elu",
     )
     
     algorithm = RslRlPpoAlgorithmCfg(
-        # Tuned for smoother, more stable policy learning
+        # Match SKRL hyperparameters exactly
         value_loss_coef=2.0,     # value_loss_scale in SKRL
         use_clipped_value_loss=True,  # clip_predicted_values in SKRL
-        clip_param=0.1,          # Reduced from 0.2 for more conservative updates
-        entropy_coef=0.05,       # Reduced from 0.2 to discourage random actions
-        num_learning_epochs=10,  # Increased from 8 for better convergence
+        clip_param=0.2,          # ratio_clip in SKRL
+        entropy_coef=0.2,        # entropy_loss_scale in SKRL
+        num_learning_epochs=8,   # learning_epochs in SKRL
         num_mini_batches=8,      # mini_batches in SKRL
-        learning_rate=3e-4,      # Reduced from 5e-4 for more stable learning
+        learning_rate=5e-4,      # learning_rate in SKRL
         schedule="adaptive",     # learning_rate_scheduler: KLAdaptiveLR
         #schedule="linear",     # learning_rate_scheduler: KLAdaptiveLR
         gamma=0.99,              # discount_factor in SKRL
         lam=0.95,                # lambda in SKRL
         desired_kl=0.008,        # kl_threshold in SKRL
-        max_grad_norm=0.5,       # Reduced from 1.0 for more stable gradients
+        max_grad_norm=1.0,       # grad_norm_clip in SKRL
     )

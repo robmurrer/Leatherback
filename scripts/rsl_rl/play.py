@@ -171,14 +171,7 @@ def main():
             # run everything in inference mode
             with torch.inference_mode():
                 # agent stepping
-                raw_actions = policy(obs)
-                # clip actions to valid range [-1, 1] for safety and log clipped actions
-                actions = torch.clamp(raw_actions, -1.0, 1.0)
-                
-                # log if clipping occurred
-                if timestep < 10 and torch.any(torch.abs(raw_actions) > 1.0):  # Only log first few instances
-                    print(f"[WARNING] Step {timestep}: Actions clipped from {raw_actions.cpu().numpy().flatten()} to {actions.cpu().numpy().flatten()}")
-                
+                actions = policy(obs)
                 # env stepping (RSL-RL wrapper returns 4 values: obs, rewards, dones, info)
                 obs_next, rewards, dones, info = env.step(actions)
                 
@@ -196,13 +189,12 @@ def main():
                         "obs_3_linear_vel_x",
                         "obs_4_linear_vel_y", 
                         "obs_5_angular_vel_z",
-                        "obs_6_current_speed",
-                        "obs_7_forward_action",
-                        "obs_8_steering_action"
+                        "obs_6_throttle_state",
+                        "obs_7_steering_state"
                     ]
                     action_headers = [
-                        "action_0_forward_speed",
-                        "action_1_steering_angle"
+                        "action_0_throttle",
+                        "action_1_steering"
                     ]
                     reset_headers = ["terminated", "truncated", "episode_reset"]
                     position_headers = ["pos_x", "pos_y", "pos_z"]
