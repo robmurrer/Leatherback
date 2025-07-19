@@ -46,20 +46,19 @@ LEATHERBACK_CFG = ArticulationCfg(
         },
     ),
     actuators={
-        "throttle": ImplicitActuatorCfg(
+        "wheel_drive": ImplicitActuatorCfg(
             joint_names_expr=["Wheel.*"],
-            effort_limit=40000.0,
-            velocity_limit=100.0,
-            stiffness=0.0,
-            damping=100000.0,
+            effort_limit=400.0,  # Reduced for more realistic control
+            velocity_limit=50.0,  # Reasonable wheel speed limit
+            stiffness=0.0,  # For velocity control
+            damping=50.0,  # Moderate damping for stability
         ),
         "steering": ImplicitActuatorCfg(
             joint_names_expr=["Knuckle__Upright__Front.*"],
-            effort_limit=40000.0,
-            velocity_limit=100.0,
-            stiffness=1000.0,
-            damping=0.0, # whyu is this zero!?!? changing this causes steering to be really impossible
-            # we need to goto full ackermann steering
+            effort_limit=200.0,  # Sufficient for steering
+            velocity_limit=10.0,  # Reasonable steering speed
+            stiffness=2000.0,  # Higher stiffness for precise position control
+            damping=100.0,  # Good damping for smooth steering without oscillation
         ),
     },
 )
