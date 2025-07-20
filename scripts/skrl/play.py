@@ -173,6 +173,50 @@ def main():
     # reset environment
     obs, _ = env.reset()
     timestep = 0
+    
+    # Log target positions in copy-pasteable format
+    print("\n" + "="*80)
+    print("TARGET POSITIONS (WAYPOINTS) - Copy-pasteable arrays:")
+    print("="*80)
+    
+    try:
+        # Access the environment's target positions
+        env_unwrapped = env.unwrapped
+        if hasattr(env_unwrapped, '_target_positions'):
+            target_positions = env_unwrapped._target_positions[0].cpu().numpy()  # Get first environment's targets
+            
+            # Format as Python arrays for easy copy-paste
+            print("# Target positions as Python list:")
+            target_list = target_positions.tolist()
+            print(f"target_positions = {target_list}")
+            
+            print("\n# Target positions as NumPy array:")
+            print(f"import numpy as np")
+            print(f"target_positions = np.array({target_list})")
+            
+            print("\n# Individual waypoints:")
+            for i, pos in enumerate(target_positions):
+                print(f"waypoint_{i} = [{pos[0]:.6f}, {pos[1]:.6f}]")
+            
+            print("\n# X and Y coordinates separately:")
+            x_coords = [pos[0] for pos in target_positions]
+            y_coords = [pos[1] for pos in target_positions]
+            print(f"x_coordinates = {x_coords}")
+            print(f"y_coordinates = {y_coords}")
+            
+            print("\n# Environment spacing and course info:")
+            print(f"env_spacing = {env_unwrapped.env_spacing}")
+            print(f"course_length_coefficient = {env_unwrapped.course_length_coefficient}")
+            print(f"num_goals = {env_unwrapped._num_goals}")
+            
+        else:
+            print("WARNING: Could not access target positions from environment")
+    except Exception as e:
+        print(f"ERROR accessing target positions: {e}")
+    
+    print("="*80)
+    print()
+    
     # simulate environment
     while simulation_app.is_running():
         start_time = time.time()

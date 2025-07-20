@@ -183,9 +183,9 @@ class LeatherbackEnv(DirectRLEnv):
 
         leatherback_pose[:, :3] += self.scene.env_origins[env_ids]
         leatherback_pose[:, 0] -= self.env_spacing / 2
-        leatherback_pose[:, 1] += 2.0 * torch.rand((num_reset), dtype=torch.float32, device=self.device) * self.course_width_coefficient
+        leatherback_pose[:, 1] += 0 #2.0 * torch.rand((num_reset), dtype=torch.float32, device=self.device) * self.course_width_coefficient
 
-        angles = torch.pi / 6.0 * torch.rand((num_reset), dtype=torch.float32, device=self.device)
+        angles = torch.zeros((num_reset), dtype=torch.float32, device=self.device)
         leatherback_pose[:, 3] = torch.cos(angles * 0.5)
         leatherback_pose[:, 6] = torch.sin(angles * 0.5)
 
@@ -199,7 +199,7 @@ class LeatherbackEnv(DirectRLEnv):
         spacing = 2 / self._num_goals
         target_positions = torch.arange(-0.8, 1.1, spacing, device=self.device) * self.env_spacing / self.course_length_coefficient
         self._target_positions[env_ids, :len(target_positions), 0] = target_positions
-        self._target_positions[env_ids, :, 1] = torch.rand((num_reset, self._num_goals), dtype=torch.float32, device=self.device) + self.course_length_coefficient
+        self._target_positions[env_ids, :, 1] = 0 #torch.rand((num_reset, self._num_goals), dtype=torch.float32, device=self.device) + self.course_length_coefficient
         self._target_positions[env_ids, :] += self.scene.env_origins[env_ids, :2].unsqueeze(1)
 
         self._target_index[env_ids] = 0
