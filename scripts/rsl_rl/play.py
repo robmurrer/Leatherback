@@ -34,6 +34,7 @@ parser.add_argument(
     help="Use the pre-trained checkpoint from Nucleus.",
 )
 parser.add_argument("--real-time", action="store_true", default=False, help="Run in real-time, if possible.")
+parser.add_argument("--log-csv", action="store_true", default=False, help="Log observations and actions to CSV file during play.")
 # append RSL-RL cli arguments
 cli_args.add_rsl_rl_args(parser)
 # append AppLauncher cli args
@@ -57,6 +58,8 @@ import gymnasium as gym
 import os
 import time
 import torch
+import csv
+import datetime
 
 from rsl_rl.runners import DistillationRunner, OnPolicyRunner
 
@@ -176,6 +179,37 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
 
     dt = env.unwrapped.step_dt
 
+    # Setup CSV logging for observations and actions (if enabled)
+    csv_file = None
+    csv_writer = None
+    csv_path = None
+    
+    if args_cli.log_csv:
+        timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        csv_filename = f"play_session_{timestamp}.csv"
+        csv_path = os.path.join(log_dir, csv_filename)
+        
+        # Create CSV file and writer
+        csv_file = open(csv_path, 'w', newline='')
+        
+        # Define CSV headers based on observation and action structure
+        headers = [
+            "timestep", "env_id", "timestamp",
+            # Actions (2D: throttle, steering)
+            "action_throttle", "action_steering",
+            # Observations (8D based on LeatherbackEnv structure)
+            "obs_position_error", "obs_cos_heading_error", "obs_sin_heading_error",
+            "obs_linear_vel_x", "obs_linear_vel_y", "obs_angular_vel_z",
+            "obs_throttle_state", "obs_steering_state"
+        ]
+        
+        csv_writer = csv.writer(csv_file)
+        csv_writer.writerow(headers)
+        
+        print(f"[INFO] CSV logging enabled: {csv_path}")
+    else:
+        print("[INFO] CSV logging disabled. Use --log-csv to enable.")
+
     # reset environment
     obs = env.get_observations()
     timestep = 0
@@ -186,10 +220,42 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
         with torch.inference_mode():
             # agent stepping
             actions = policy(obs)
+            
+            # Log data to CSV before stepping environment (if enabled)
+            if args_cli.log_csv and csv_writer is not None:
+                current_time = datetime.datetime.now().isoformat()
+                
+                # Get observations from the policy key (based on LeatherbackEnv structure)
+                policy_obs = obs["policy"]
+                
+                # Log data for each environment
+                for env_id in range(policy_obs.shape[0]):
+                    # Extract action data for this environment
+                    action_data = actions[env_id].cpu().numpy()
+                    
+                    # Extract observation data for this environment  
+                    obs_data = policy_obs[env_id].cpu().numpy()
+                    
+                    # Write row to CSV
+                    row_data = [
+                        timestep, env_id, current_time,
+                        # Actions
+                        float(action_data[0]), float(action_data[1]),
+                        # Observations
+                        float(obs_data[0]), float(obs_data[1]), float(obs_data[2]),
+                        float(obs_data[3]), float(obs_data[4]), float(obs_data[5]),
+                        float(obs_data[6]), float(obs_data[7])
+                    ]
+                    csv_writer.writerow(row_data)
+                
+                # Flush CSV data to ensure it's written
+                csv_file.flush()
+            
             # env stepping
             obs, _, _, _ = env.step(actions)
+            
+        timestep += 1
         if args_cli.video:
-            timestep += 1
             # Exit the play loop after recording one video
             if timestep == args_cli.video_length:
                 break
@@ -199,6 +265,11 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
         if args_cli.real_time and sleep_time > 0:
             time.sleep(sleep_time)
 
+    # close CSV file if it was opened
+    if csv_file is not None:
+        csv_file.close()
+        print(f"[INFO] CSV logging completed: {csv_path}")
+    
     # close the simulator
     env.close()
 
